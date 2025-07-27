@@ -1,71 +1,47 @@
 
 const express = require('express');
-const { GoogleGenerativeAI } = require('@google/generative-ai');
+const axios = require('axios');
 const { db } = require('../database/init');
 const { authenticateToken } = require('../middleware/auth');
 const router = express.Router();
 
-// Replit AI Integration (using built-in capabilities)
-async function callReplitAI(prompt) {
+// xAI Grok API Configuration
+const XAI_API_URL = 'https://api.x.ai/v1/chat/completions';
+const XAI_API_KEY = process.env.XAI_API_KEY;
+
+// Enhanced AI Assistant for YCA CRM using xAI Grok
+async function callGrokAI(messages, model = 'grok-beta') {
   try {
-    // Use Replit's built-in AI assistant functionality
-    // This provides intelligent responses based on the context
-    return generateIntelligentResponse(prompt);
+    if (!XAI_API_KEY) {
+      throw new Error('xAI API key not configured');
+    }
+
+    const response = await axios.post(XAI_API_URL, {
+      model: model,
+      messages: messages,
+      max_tokens: 1024,
+      temperature: 0.7
+    }, {
+      headers: {
+        'Authorization': `Bearer ${XAI_API_KEY}`,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    return response.data.choices[0].message.content;
   } catch (error) {
-    console.log('Replit AI unavailable:', error.message);
+    console.error('xAI Grok API error:', error.response?.data || error.message);
+    throw error;
   }
-  return null;
 }
-
-// Generate intelligent responses based on context
-function generateIntelligentResponse(prompt) {
-  const responses = {
-    cadet: "Based on the cadet's profile, I recommend focusing on positive behavior reinforcement and individualized mentorship approaches.",
-    staff: "For staff management, consider workload distribution and ensuring adequate support for high-stress situations.",
-    schedule: "When optimizing schedules, prioritize high-risk cadets during peak staff availability hours.",
-    reports: "Your reports show good progress. Focus on areas where cadets need additional support.",
-    default: "I'm here to help with YCA management. Could you provide more specific details about what you need assistance with?"
-  };
-  
-  const context = prompt.toLowerCase();
-  if (context.includes('cadet')) return responses.cadet;
-  if (context.includes('staff')) return responses.staff;
-  if (context.includes('schedule')) return responses.schedule;
-  if (context.includes('report')) return responses.reports;
-  
-  return responses.default;
-}
-
-const genAI = process.env.API_KEY ? new GoogleGenerativeAI(process.env.API_KEY) : null;
 
 // Enhanced AI Assistant for YCA CRM
 router.post('/chat', authenticateToken, async (req, res) => {
   try {
     const { message, context = 'general', cadetId, staffId } = req.body;
 
-    if (!genAI) {
-      // Try Replit AI as fallback
-      const replitResponse = await callReplitAI(fullPrompt);
-      if (replitResponse) {
-        return res.json({
-          response: replitResponse,
-          context,
-          suggestions: generateSuggestions(context, message),
-          timestamp: new Date().toISOString(),
-          source: 'replit-ai'
-        });
-      }
-      
-      return res.json({
-        response: "AI Assistant is currently unavailable. Please configure the Google Gemini API key in your environment.",
-        suggestions: ["Check system status", "Contact administrator", "Try again later"]
-      });
-    }
-
-    const model = genAI.getGenerativeModel({ model: "gemini-pro" });
-
     // Build context-aware prompt
-    let systemPrompt = `You are an AI assistant for the Hawaii National Guard Youth Challenge Academy (YCA) CRM system. 
+    let systemPrompt = `You are Grok, an AI assistant for the Hawaii National Guard Youth Challenge Academy (YCA) CRM system. 
     You help staff manage at-risk youth (ages 16-18) with a focus on:
     - Behavior management and positive outcomes
     - HiSET completion (target: 78%)
@@ -73,7 +49,7 @@ router.post('/chat', authenticateToken, async (req, res) => {
     - Community service coordination
     - Mentorship and peer dynamics
     
-    Respond professionally and provide actionable advice based on child psychology principles.`;
+    Be helpful, insightful, and maintain a professional yet approachable tone. Provide actionable advice based on child psychology principles and youth development best practices.`;
 
     let contextData = '';
 
@@ -87,7 +63,7 @@ router.post('/chat', authenticateToken, async (req, res) => {
       });
 
       if (cadet) {
-        contextData = `\nCadet Context:
+        contextData = `\n\nCadet Context:
         - Name: ${cadet.first_name} ${cadet.last_name}
         - Behavior Score: ${cadet.behavior_score}/5
         - HiSET Status: ${cadet.hiset_status}
@@ -96,16 +72,25 @@ router.post('/chat', authenticateToken, async (req, res) => {
       }
     }
 
-    const fullPrompt = `${systemPrompt}${contextData}\n\nUser Question: ${message}`;
+    const messages = [
+      {
+        role: 'system',
+        content: systemPrompt + contextData
+      },
+      {
+        role: 'user',
+        content: message
+      }
+    ];
 
-    const result = await model.generateContent(fullPrompt);
-    const response = result.response.text();
+    const response = await callGrokAI(messages);
 
     res.json({
       response,
       context,
       suggestions: generateSuggestions(context, message),
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      source: 'xai-grok'
     });
 
   } catch (error) {
@@ -117,7 +102,7 @@ router.post('/chat', authenticateToken, async (req, res) => {
   }
 });
 
-// Enhanced sentiment analysis with psychological insights
+// Enhanced sentiment analysis with psychological insights using Grok
 router.post('/analyze-sentiment', authenticateToken, async (req, res) => {
   try {
     const { text, cadetId, type = 'mentorship_note' } = req.body;
@@ -126,30 +111,32 @@ router.post('/analyze-sentiment', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: 'Text is required' });
     }
 
-    if (!genAI) {
-      return res.json(fallbackSentimentAnalysis(text));
-    }
+    const messages = [
+      {
+        role: 'system',
+        content: `You are a child psychology expert analyzing ${type} about a YCA cadet. Provide analysis in valid JSON format only, no additional text.`
+      },
+      {
+        role: 'user',
+        content: `Analyze this ${type} about a YCA cadet and respond with only JSON:
 
-    const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+"${text}"
 
-    const prompt = `As a child psychology expert, analyze this ${type} about a YCA cadet:
+Required JSON format:
+{
+  "sentiment": "positive|negative|neutral|concerning",
+  "urgency": "low|medium|high|critical",
+  "psychologicalIndicators": ["indicator1", "indicator2"],
+  "recommendations": ["action1", "action2"],
+  "riskFactors": ["factor1", "factor2"],
+  "strengths": ["strength1", "strength2"],
+  "followUpNeeded": true,
+  "confidenceScore": 0.85
+}`
+      }
+    ];
 
-    "${text}"
-
-    Provide analysis in this JSON format:
-    {
-      "sentiment": "positive|negative|neutral|concerning",
-      "urgency": "low|medium|high|critical",
-      "psychologicalIndicators": ["indicator1", "indicator2"],
-      "recommendations": ["action1", "action2"],
-      "riskFactors": ["factor1", "factor2"],
-      "strengths": ["strength1", "strength2"],
-      "followUpNeeded": true/false,
-      "confidenceScore": 0.85
-    }`;
-
-    const result = await model.generateContent(prompt);
-    const response = result.response.text();
+    const response = await callGrokAI(messages);
 
     try {
       const analysis = JSON.parse(response);
@@ -164,14 +151,16 @@ router.post('/analyze-sentiment', authenticateToken, async (req, res) => {
 
       res.json(analysis);
     } catch (parseError) {
+      console.error('JSON parse error:', parseError);
       res.json(fallbackSentimentAnalysis(text));
     }
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('Sentiment analysis error:', error);
+    res.json(fallbackSentimentAnalysis(text));
   }
 });
 
-// AI-powered intervention recommendations
+// AI-powered intervention recommendations using Grok
 router.post('/intervention-recommendations', authenticateToken, async (req, res) => {
   try {
     const { cadetId, situation, urgency = 'medium' } = req.body;
@@ -187,34 +176,36 @@ router.post('/intervention-recommendations', authenticateToken, async (req, res)
       return res.status(404).json({ error: 'Cadet not found' });
     }
 
-    if (!genAI) {
-      return res.json(generateFallbackInterventions(cadet, situation, urgency));
-    }
+    const messages = [
+      {
+        role: 'system',
+        content: 'You are a youth development specialist. Provide intervention recommendations in valid JSON format only.'
+      },
+      {
+        role: 'user',
+        content: `Recommend interventions for this YCA cadet and respond with only JSON:
 
-    const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+Cadet Profile:
+- Age: ${cadet.age}
+- Behavior Score: ${cadet.behavior_score}/5
+- Current Situation: ${situation}
+- Urgency Level: ${urgency}
+- Background: At-risk youth in military-style academy
 
-    const prompt = `As a youth development specialist, recommend interventions for this YCA cadet:
+Required JSON format:
+{
+  "immediateActions": ["action1", "action2"],
+  "shortTermStrategies": ["strategy1", "strategy2"],
+  "longTermGoals": ["goal1", "goal2"],
+  "resourcesNeeded": ["resource1", "resource2"],
+  "timeframe": "immediate|days|weeks",
+  "successMetrics": ["metric1", "metric2"],
+  "riskMitigation": ["risk1", "risk2"]
+}`
+      }
+    ];
 
-    Cadet Profile:
-    - Age: ${cadet.age}
-    - Behavior Score: ${cadet.behavior_score}/5
-    - Current Situation: ${situation}
-    - Urgency Level: ${urgency}
-    - Background: At-risk youth in military-style academy
-
-    Provide recommendations in JSON format:
-    {
-      "immediateActions": ["action1", "action2"],
-      "shortTermStrategies": ["strategy1", "strategy2"],
-      "longTermGoals": ["goal1", "goal2"],
-      "resourcesNeeded": ["resource1", "resource2"],
-      "timeframe": "immediate|days|weeks",
-      "successMetrics": ["metric1", "metric2"],
-      "riskMitigation": ["risk1", "risk2"]
-    }`;
-
-    const result = await model.generateContent(prompt);
-    const response = result.response.text();
+    const response = await callGrokAI(messages);
 
     try {
       const recommendations = JSON.parse(response);
@@ -223,11 +214,12 @@ router.post('/intervention-recommendations', authenticateToken, async (req, res)
       res.json(generateFallbackInterventions(cadet, situation, urgency));
     }
   } catch (error) {
+    console.error('Intervention recommendations error:', error);
     res.status(500).json({ error: error.message });
   }
 });
 
-// AI-powered schedule optimization
+// AI-powered schedule optimization using Grok
 router.post('/optimize-schedule', authenticateToken, async (req, res) => {
   try {
     const { date, constraints = [] } = req.body;
@@ -246,45 +238,48 @@ router.post('/optimize-schedule', authenticateToken, async (req, res) => {
       });
     });
 
-    if (!genAI) {
-      return res.json(generateBasicSchedule(staff, cadets, date));
-    }
+    const messages = [
+      {
+        role: 'system',
+        content: 'You are a scheduling optimization expert for youth development programs.'
+      },
+      {
+        role: 'user',
+        content: `Optimize the daily schedule for YCA Kapolei:
 
-    const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+Date: ${date}
+Staff Available: ${staff.length} (${staff.map(s => s.first_name).join(', ')})
+Cadets: ${cadets.length} total
+High-Risk Cadets: ${cadets.filter(c => c.behavior_score <= 2).length}
 
-    const prompt = `Optimize the daily schedule for YCA Kapolei:
+Constraints: ${constraints.join(', ')}
 
-    Date: ${date}
-    Staff Available: ${staff.length} (${staff.map(s => s.first_name).join(', ')})
-    Cadets: ${cadets.length} total
-    High-Risk Cadets: ${cadets.filter(c => c.behavior_score <= 2).length}
-    
-    Constraints: ${constraints.join(', ')}
-    
-    Required Activities:
-    - Morning formation and inspection
-    - Academic classes (HiSET prep)
-    - Physical training
-    - Community service
-    - Mentorship sessions
-    - Life skills training
-    
-    Provide optimized schedule in JSON format with time slots, assigned staff, and rationale.`;
+Required Activities:
+- Morning formation and inspection
+- Academic classes (HiSET prep)
+- Physical training
+- Community service
+- Mentorship sessions
+- Life skills training
 
-    const result = await model.generateContent(prompt);
-    const response = result.response.text();
+Provide an optimized schedule with time slots, assigned staff, and rationale for the scheduling decisions.`
+      }
+    ];
+
+    const response = await callGrokAI(messages);
 
     res.json({
       schedule: response,
-      optimization_notes: "AI-optimized based on staff availability and cadet needs",
+      optimization_notes: "AI-optimized using xAI Grok based on staff availability and cadet needs",
       generated_at: new Date().toISOString()
     });
   } catch (error) {
+    console.error('Schedule optimization error:', error);
     res.status(500).json({ error: error.message });
   }
 });
 
-// Enhanced predictive analytics
+// Enhanced predictive analytics using Grok
 router.get('/predict-outcomes/:cadetId', authenticateToken, async (req, res) => {
   try {
     const { cadetId } = req.params;
@@ -303,33 +298,35 @@ router.get('/predict-outcomes/:cadetId', authenticateToken, async (req, res) => 
       });
     });
 
-    if (!genAI) {
-      return res.json(generateBasicPrediction(cadet, mentorshipLogs));
-    }
+    const messages = [
+      {
+        role: 'system',
+        content: 'You are a predictive analytics expert for youth development programs. Provide predictions in valid JSON format only.'
+      },
+      {
+        role: 'user',
+        content: `Predict success outcomes for this YCA cadet and respond with only JSON:
 
-    const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+Cadet Profile:
+- Behavior Score Trend: ${cadet.behavior_score}/5
+- Days in Program: ${Math.floor((new Date() - new Date(cadet.enrollment_date)) / (1000 * 60 * 60 * 24))}
+- HiSET Status: ${cadet.hiset_status}
+- Recent Mentorship Notes: ${mentorshipLogs.length} entries
 
-    const prompt = `Predict success outcomes for this YCA cadet based on current data:
+Required JSON format:
+{
+  "hisetCompletionProbability": 0.75,
+  "workforcePlacementProbability": 0.65,
+  "programCompletionProbability": 0.80,
+  "riskFactors": ["factor1", "factor2"],
+  "protectiveFactors": ["factor1", "factor2"],
+  "recommendedInterventions": ["intervention1", "intervention2"],
+  "confidenceLevel": "high|medium|low"
+}`
+      }
+    ];
 
-    Cadet Profile:
-    - Behavior Score Trend: ${cadet.behavior_score}/5
-    - Days in Program: ${Math.floor((new Date() - new Date(cadet.enrollment_date)) / (1000 * 60 * 60 * 24))}
-    - HiSET Status: ${cadet.hiset_status}
-    - Recent Mentorship Notes: ${mentorshipLogs.length} entries
-    
-    Provide predictions in JSON format:
-    {
-      "hisetCompletionProbability": 0.75,
-      "workforcePlacementProbability": 0.65,
-      "programCompletionProbability": 0.80,
-      "riskFactors": ["factor1", "factor2"],
-      "protectiveFactors": ["factor1", "factor2"],
-      "recommendedInterventions": ["intervention1", "intervention2"],
-      "confidenceLevel": "high|medium|low"
-    }`;
-
-    const result = await model.generateContent(prompt);
-    const response = result.response.text();
+    const response = await callGrokAI(messages);
 
     try {
       const predictions = JSON.parse(response);
@@ -338,6 +335,7 @@ router.get('/predict-outcomes/:cadetId', authenticateToken, async (req, res) => 
       res.json(generateBasicPrediction(cadet, mentorshipLogs));
     }
   } catch (error) {
+    console.error('Predictive analytics error:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -354,7 +352,7 @@ function generateSuggestions(context, message) {
 
 function generateFallbackResponse(message, context) {
   const responses = {
-    general: "I'm here to help with the YCA CRM system. Try asking about cadets, schedules, or reports.",
+    general: "I'm Grok, here to help with the YCA CRM system. Try asking about cadets, schedules, or reports.",
     cadet: "For cadet-related questions, I can help with behavior tracking, mentorship, and academic progress.",
     staff: "For staff management, I can assist with scheduling, assignments, and workload distribution."
   };
@@ -400,17 +398,6 @@ function generateFallbackInterventions(cadet, situation, urgency) {
   };
   
   return interventions[urgency] || interventions.medium;
-}
-
-function generateBasicSchedule(staff, cadets, date) {
-  return {
-    message: "Basic schedule optimization available. Enable AI for advanced scheduling.",
-    recommendations: [
-      "Ensure adequate staff-to-cadet ratios",
-      "Schedule high-risk cadets during peak supervision hours",
-      "Balance academic and physical activities"
-    ]
-  };
 }
 
 function generateBasicPrediction(cadet, mentorshipLogs) {

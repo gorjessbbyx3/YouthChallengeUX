@@ -27,7 +27,7 @@ export const AIAssistant = () => {
   const [messages, setMessages] = useState([
     {
       type: 'assistant',
-      content: 'Hello! I\'m your AI assistant for the YCA CRM system. I can help with cadet management, sentiment analysis, intervention recommendations, and more. How can I assist you today?',
+      content: 'Hello! I\'m Grok, your AI assistant for the YCA CRM system. I can help with cadet management, sentiment analysis, intervention recommendations, schedule optimization, and more. How can I assist you today?',
       timestamp: new Date().toISOString()
     }
   ]);
@@ -126,7 +126,7 @@ export const AIAssistant = () => {
     <Box sx={{ height: '100vh', display: 'flex', flexDirection: 'column', p: 2 }}>
       <Typography variant="h4" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
         <AIIcon color="primary" />
-        AI Assistant
+        Grok AI Assistant
       </Typography>
 
       {/* Context Selection */}
