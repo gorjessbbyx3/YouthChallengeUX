@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Admin, Resource, ListGuesser, EditGuesser, ShowGuesser } from 'react-admin';
 import jsonServerProvider from 'ra-data-json-server';
@@ -10,6 +9,7 @@ import { InventoryList, InventoryEdit, InventoryCreate } from './components/Inve
 import { EventList, EventCreate, EventEdit } from './components/Events';
 import { authProvider } from './authProvider';
 import { Layout } from './Layout';
+import { AIAssistant } from './components/AIAssistant';
 
 // Icons
 import PeopleIcon from '@mui/icons-material/People';
@@ -68,7 +68,8 @@ const App = () => (
       icon={EventIcon}
       options={{ label: 'Events' }}
     />
-  </Admin>
+        <Resource name="ai-assistant" list={AIAssistant} />
+      </Admin>
 );
 
 export default App;

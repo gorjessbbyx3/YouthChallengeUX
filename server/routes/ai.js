@@ -1,25 +1,108 @@
+
 const express = require('express');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const { db } = require('../database/init');
 const { authenticateToken } = require('../middleware/auth');
 const router = express.Router();
 
-const genAI = new GoogleGenerativeAI(process.env.API_KEY);
+const genAI = process.env.API_KEY ? new GoogleGenerativeAI(process.env.API_KEY) : null;
 
-// Sentiment analysis for mentor notes
-router.post('/sentiment-analysis', authenticateToken, async (req, res) => {
+// Enhanced AI Assistant for YCA CRM
+router.post('/chat', authenticateToken, async (req, res) => {
   try {
-    const { notes, mentorLogId } = req.body;
+    const { message, context = 'general', cadetId, staffId } = req.body;
+
+    if (!genAI) {
+      return res.json({
+        response: "AI Assistant is currently unavailable. Please configure the Google Gemini API key in your environment.",
+        suggestions: ["Check system status", "Contact administrator", "Try again later"]
+      });
+    }
 
     const model = genAI.getGenerativeModel({ model: "gemini-pro" });
 
-    const prompt = `Analyze the sentiment of this mentor note about a cadet and return a score from -1 (very negative) to 1 (very positive), and determine if it should be flagged for urgent attention. Note: "${notes}"
+    // Build context-aware prompt
+    let systemPrompt = `You are an AI assistant for the Hawaii National Guard Youth Challenge Academy (YCA) CRM system. 
+    You help staff manage at-risk youth (ages 16-18) with a focus on:
+    - Behavior management and positive outcomes
+    - HiSET completion (target: 78%)
+    - Workforce placement (target: 48%)
+    - Community service coordination
+    - Mentorship and peer dynamics
+    
+    Respond professionally and provide actionable advice based on child psychology principles.`;
 
-    Return your response in this exact JSON format:
+    let contextData = '';
+
+    // Add specific context based on request type
+    if (context === 'cadet' && cadetId) {
+      const cadet = await new Promise((resolve, reject) => {
+        db.get('SELECT * FROM cadets WHERE id = ?', [cadetId], (err, row) => {
+          if (err) reject(err);
+          else resolve(row);
+        });
+      });
+
+      if (cadet) {
+        contextData = `\nCadet Context:
+        - Name: ${cadet.first_name} ${cadet.last_name}
+        - Behavior Score: ${cadet.behavior_score}/5
+        - HiSET Status: ${cadet.hiset_status}
+        - Placement Status: ${cadet.placement_status}
+        - Risk Level: ${cadet.behavior_score <= 2 ? 'High' : cadet.behavior_score <= 3 ? 'Medium' : 'Low'}`;
+      }
+    }
+
+    const fullPrompt = `${systemPrompt}${contextData}\n\nUser Question: ${message}`;
+
+    const result = await model.generateContent(fullPrompt);
+    const response = result.response.text();
+
+    res.json({
+      response,
+      context,
+      suggestions: generateSuggestions(context, message),
+      timestamp: new Date().toISOString()
+    });
+
+  } catch (error) {
+    console.error('AI Chat error:', error);
+    res.status(500).json({ 
+      error: 'AI service temporarily unavailable',
+      fallback: generateFallbackResponse(req.body.message, req.body.context)
+    });
+  }
+});
+
+// Enhanced sentiment analysis with psychological insights
+router.post('/analyze-sentiment', authenticateToken, async (req, res) => {
+  try {
+    const { text, cadetId, type = 'mentorship_note' } = req.body;
+
+    if (!text) {
+      return res.status(400).json({ error: 'Text is required' });
+    }
+
+    if (!genAI) {
+      return res.json(fallbackSentimentAnalysis(text));
+    }
+
+    const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+
+    const prompt = `As a child psychology expert, analyze this ${type} about a YCA cadet:
+
+    "${text}"
+
+    Provide analysis in this JSON format:
     {
-      "sentimentScore": 0.2,
-      "flagged": false,
-      "reason": "explanation of the sentiment and flagging decision"
+      "sentiment": "positive|negative|neutral|concerning",
+      "urgency": "low|medium|high|critical",
+      "psychologicalIndicators": ["indicator1", "indicator2"],
+      "recommendations": ["action1", "action2"],
+      "riskFactors": ["factor1", "factor2"],
+      "strengths": ["strength1", "strength2"],
+      "followUpNeeded": true/false,
+      "confidenceScore": 0.85
     }`;
 
     const result = await model.generateContent(prompt);
@@ -27,188 +110,278 @@ router.post('/sentiment-analysis', authenticateToken, async (req, res) => {
 
     try {
       const analysis = JSON.parse(response);
-
-      // Update the mentor log with sentiment analysis
-      if (mentorLogId) {
-        db.run(
-          'UPDATE mentorship_logs SET sentiment_score = ?, flagged = ? WHERE id = ?',
-          [analysis.sentimentScore, analysis.flagged ? 1 : 0, mentorLogId]
-        );
+      
+      // Log the analysis
+      if (cadetId) {
+        db.run(`
+          INSERT INTO sentiment_logs (cadet_id, text_analyzed, sentiment, urgency, analysis_date)
+          VALUES (?, ?, ?, ?, ?)
+        `, [cadetId, text, analysis.sentiment, analysis.urgency, new Date().toISOString()]);
       }
 
       res.json(analysis);
     } catch (parseError) {
-      // Fallback simple sentiment analysis
-      const negativePhrases = ['unmotivated', 'aggressive', 'disruptive', 'concerning', 'problem'];
-      const hasNegative = negativePhrases.some(phrase => notes.toLowerCase().includes(phrase));
-
-      res.json({
-        sentimentScore: hasNegative ? -0.5 : 0.2,
-        flagged: hasNegative,
-        reason: 'Fallback analysis based on keyword detection'
-      });
+      res.json(fallbackSentimentAnalysis(text));
     }
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-// Generate automated reports
-router.post('/generate-report', authenticateToken, async (req, res) => {
+// AI-powered intervention recommendations
+router.post('/intervention-recommendations', authenticateToken, async (req, res) => {
   try {
-    const { reportType, startDate, endDate } = req.body;
+    const { cadetId, situation, urgency = 'medium' } = req.body;
 
-    // Get relevant data based on report type
-    let data = {};
-
-    if (reportType === 'monthly_summary') {
-      // Get stats for the period
-      db.all(`
-        SELECT 
-          COUNT(DISTINCT c.id) as total_cadets,
-          COUNT(DISTINCT ml.id) as mentorship_sessions,
-          AVG(c.behavior_score) as avg_behavior_score,
-          SUM(e.community_service_hours) as total_service_hours,
-          COUNT(CASE WHEN c.hiset_status = 'completed' THEN 1 END) as hiset_completions,
-          COUNT(CASE WHEN c.placement_status IN ('workforce', 'education', 'military') THEN 1 END) as successful_placements
-        FROM cadets c
-        LEFT JOIN mentorship_logs ml ON c.id = ml.cadet_id AND ml.date BETWEEN ? AND ?
-        LEFT JOIN events e ON e.start_date BETWEEN ? AND ?
-      `, [startDate, endDate, startDate, endDate], async (err, stats) => {
-        if (err) {
-          return res.status(500).json({ error: err.message });
-        }
-
-        if (!genAI) {
-          return res.json({ 
-            report: 'AI report generation is currently unavailable. Please configure the Google Gemini API key.',
-            stats: stats[0]
-          });
-        }
-
-        const model = genAI.getGenerativeModel({ model: "gemini-pro" });
-
-        const prompt = `Generate a professional monthly summary report for the Hawaii National Guard Youth Challenge Academy based on these statistics:
-
-        - Total Cadets: ${stats[0].total_cadets}
-        - Mentorship Sessions: ${stats[0].mentorship_sessions}
-        - Average Behavior Score: ${stats[0].avg_behavior_score?.toFixed(2) || 'N/A'}
-        - Community Service Hours: ${stats[0].total_service_hours || 0}
-        - HiSET Completions: ${stats[0].hiset_completions}
-        - Successful Placements: ${stats[0].successful_placements}
-
-        Format this as a professional report suitable for DoD funders, highlighting program success and areas for improvement.`;
-
-        const result = await model.generateContent(prompt);
-        const report = result.response.text();
-
-        res.json({ report, stats: stats[0] });
+    const cadet = await new Promise((resolve, reject) => {
+      db.get('SELECT * FROM cadets WHERE id = ?', [cadetId], (err, row) => {
+        if (err) reject(err);
+        else resolve(row);
       });
-    } else {
-      res.status(400).json({ error: 'Unsupported report type' });
-    }
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Inventory forecasting
-router.get('/inventory-forecast', authenticateToken, (req, res) => {
-  const { days = 30 } = req.query;
-
-  db.all('SELECT * FROM inventory', (err, items) => {
-    if (err) {
-      return res.status(500).json({ error: err.message });
-    }
-
-    const forecast = items.map(item => {
-      const projectedUsage = item.usage_rate * parseInt(days);
-      const projectedQuantity = item.quantity - projectedUsage;
-      const needsRestock = projectedQuantity < item.threshold;
-
-      return {
-        ...item,
-        projectedQuantity: Math.max(0, projectedQuantity),
-        needsRestock,
-        recommendedOrder: needsRestock ? Math.ceil(item.threshold * 2 - projectedQuantity) : 0
-      };
     });
 
-    res.json(forecast);
-  });
-});
-
-router.post('/analyze-sentiment', authenticateToken, async (req, res) => {
-  try {
-    const { text } = req.body;
-
-    if (!text) {
-      return res.status(400).json({ error: 'Text is required' });
+    if (!cadet) {
+      return res.status(404).json({ error: 'Cadet not found' });
     }
 
     if (!genAI) {
-      // Fallback sentiment analysis without AI
-      const negativeKeywords = ['frustrated', 'angry', 'upset', 'difficult', 'problem', 'fight', 'trouble'];
-      const positiveKeywords = ['good', 'excellent', 'progress', 'improvement', 'success', 'motivated'];
-
-      const lowerText = text.toLowerCase();
-      const hasNegative = negativeKeywords.some(keyword => lowerText.includes(keyword));
-      const hasPositive = positiveKeywords.some(keyword => lowerText.includes(keyword));
-
-      let sentiment = 'neutral';
-      let urgency = 'low';
-
-      if (hasNegative && !hasPositive) {
-        sentiment = 'negative';
-        urgency = 'medium';
-      } else if (hasPositive && !hasNegative) {
-        sentiment = 'positive';
-      }
-
-      return res.json({
-        sentiment,
-        urgency,
-        keywords: negativeKeywords.filter(keyword => lowerText.includes(keyword)),
-        recommendation: sentiment === 'negative' ? 'Schedule follow-up meeting' : 'Continue current approach',
-        reason: 'Basic keyword analysis (AI unavailable)'
-      });
+      return res.json(generateFallbackInterventions(cadet, situation, urgency));
     }
 
     const model = genAI.getGenerativeModel({ model: "gemini-pro" });
 
-    const prompt = `Analyze the sentiment of this mentorship note and provide a risk assessment:
+    const prompt = `As a youth development specialist, recommend interventions for this YCA cadet:
 
-    "${text}"
+    Cadet Profile:
+    - Age: ${cadet.age}
+    - Behavior Score: ${cadet.behavior_score}/5
+    - Current Situation: ${situation}
+    - Urgency Level: ${urgency}
+    - Background: At-risk youth in military-style academy
 
-    Return a JSON response with:
-    - sentiment: "positive", "negative", or "neutral"
-    - urgency: "low", "medium", or "high"
-    - keywords: array of concerning keywords found
-    - recommendation: brief action recommendation`;
+    Provide recommendations in JSON format:
+    {
+      "immediateActions": ["action1", "action2"],
+      "shortTermStrategies": ["strategy1", "strategy2"],
+      "longTermGoals": ["goal1", "goal2"],
+      "resourcesNeeded": ["resource1", "resource2"],
+      "timeframe": "immediate|days|weeks",
+      "successMetrics": ["metric1", "metric2"],
+      "riskMitigation": ["risk1", "risk2"]
+    }`;
 
     const result = await model.generateContent(prompt);
     const response = result.response.text();
 
     try {
-      const analysis = JSON.parse(response);
-      res.json(analysis);
+      const recommendations = JSON.parse(response);
+      res.json(recommendations);
     } catch (parseError) {
-      // Fallback parsing if AI doesn't return valid JSON
-      const sentiment = text.toLowerCase().includes('frustrated') || 
-                       text.toLowerCase().includes('angry') || 
-                       text.toLowerCase().includes('upset') ? 'negative' : 'neutral';
-
-      res.json({
-        sentiment,
-        urgency: sentiment === 'negative' ? 'medium' : 'low',
-        keywords: [],
-        recommendation: sentiment === 'negative' ? 'Schedule follow-up meeting' : 'Continue monitoring',
-        reason: 'Fallback analysis based on keyword detection'
-      });
+      res.json(generateFallbackInterventions(cadet, situation, urgency));
     }
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
+
+// AI-powered schedule optimization
+router.post('/optimize-schedule', authenticateToken, async (req, res) => {
+  try {
+    const { date, constraints = [] } = req.body;
+
+    const staff = await new Promise((resolve, reject) => {
+      db.all('SELECT * FROM staff WHERE status = "active"', (err, rows) => {
+        if (err) reject(err);
+        else resolve(rows);
+      });
+    });
+
+    const cadets = await new Promise((resolve, reject) => {
+      db.all('SELECT * FROM cadets WHERE status = "active"', (err, rows) => {
+        if (err) reject(err);
+        else resolve(rows);
+      });
+    });
+
+    if (!genAI) {
+      return res.json(generateBasicSchedule(staff, cadets, date));
+    }
+
+    const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+
+    const prompt = `Optimize the daily schedule for YCA Kapolei:
+
+    Date: ${date}
+    Staff Available: ${staff.length} (${staff.map(s => s.first_name).join(', ')})
+    Cadets: ${cadets.length} total
+    High-Risk Cadets: ${cadets.filter(c => c.behavior_score <= 2).length}
+    
+    Constraints: ${constraints.join(', ')}
+    
+    Required Activities:
+    - Morning formation and inspection
+    - Academic classes (HiSET prep)
+    - Physical training
+    - Community service
+    - Mentorship sessions
+    - Life skills training
+    
+    Provide optimized schedule in JSON format with time slots, assigned staff, and rationale.`;
+
+    const result = await model.generateContent(prompt);
+    const response = result.response.text();
+
+    res.json({
+      schedule: response,
+      optimization_notes: "AI-optimized based on staff availability and cadet needs",
+      generated_at: new Date().toISOString()
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Enhanced predictive analytics
+router.get('/predict-outcomes/:cadetId', authenticateToken, async (req, res) => {
+  try {
+    const { cadetId } = req.params;
+
+    const cadet = await new Promise((resolve, reject) => {
+      db.get('SELECT * FROM cadets WHERE id = ?', [cadetId], (err, row) => {
+        if (err) reject(err);
+        else resolve(row);
+      });
+    });
+
+    const mentorshipLogs = await new Promise((resolve, reject) => {
+      db.all('SELECT * FROM mentorship_logs WHERE cadet_id = ? ORDER BY date DESC LIMIT 10', [cadetId], (err, rows) => {
+        if (err) reject(err);
+        else resolve(rows);
+      });
+    });
+
+    if (!genAI) {
+      return res.json(generateBasicPrediction(cadet, mentorshipLogs));
+    }
+
+    const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+
+    const prompt = `Predict success outcomes for this YCA cadet based on current data:
+
+    Cadet Profile:
+    - Behavior Score Trend: ${cadet.behavior_score}/5
+    - Days in Program: ${Math.floor((new Date() - new Date(cadet.enrollment_date)) / (1000 * 60 * 60 * 24))}
+    - HiSET Status: ${cadet.hiset_status}
+    - Recent Mentorship Notes: ${mentorshipLogs.length} entries
+    
+    Provide predictions in JSON format:
+    {
+      "hisetCompletionProbability": 0.75,
+      "workforcePlacementProbability": 0.65,
+      "programCompletionProbability": 0.80,
+      "riskFactors": ["factor1", "factor2"],
+      "protectiveFactors": ["factor1", "factor2"],
+      "recommendedInterventions": ["intervention1", "intervention2"],
+      "confidenceLevel": "high|medium|low"
+    }`;
+
+    const result = await model.generateContent(prompt);
+    const response = result.response.text();
+
+    try {
+      const predictions = JSON.parse(response);
+      res.json(predictions);
+    } catch (parseError) {
+      res.json(generateBasicPrediction(cadet, mentorshipLogs));
+    }
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Fallback functions for when AI is unavailable
+function generateSuggestions(context, message) {
+  const suggestions = {
+    general: ["Check cadet status", "Review daily schedule", "Generate reports"],
+    cadet: ["View behavior history", "Schedule mentorship", "Check HiSET progress"],
+    staff: ["View assignments", "Check schedule", "Review alerts"]
+  };
+  return suggestions[context] || suggestions.general;
+}
+
+function generateFallbackResponse(message, context) {
+  const responses = {
+    general: "I'm here to help with the YCA CRM system. Try asking about cadets, schedules, or reports.",
+    cadet: "For cadet-related questions, I can help with behavior tracking, mentorship, and academic progress.",
+    staff: "For staff management, I can assist with scheduling, assignments, and workload distribution."
+  };
+  return responses[context] || responses.general;
+}
+
+function fallbackSentimentAnalysis(text) {
+  const negativeKeywords = ['frustrated', 'angry', 'upset', 'difficult', 'problem', 'fight', 'trouble', 'concerning'];
+  const positiveKeywords = ['good', 'excellent', 'progress', 'improvement', 'success', 'motivated', 'positive'];
+  
+  const lowerText = text.toLowerCase();
+  const hasNegative = negativeKeywords.some(keyword => lowerText.includes(keyword));
+  const hasPositive = positiveKeywords.some(keyword => lowerText.includes(keyword));
+  
+  return {
+    sentiment: hasNegative ? 'negative' : hasPositive ? 'positive' : 'neutral',
+    urgency: hasNegative ? 'medium' : 'low',
+    psychologicalIndicators: negativeKeywords.filter(keyword => lowerText.includes(keyword)),
+    recommendations: hasNegative ? ['Schedule follow-up meeting', 'Consider additional support'] : ['Continue current approach'],
+    followUpNeeded: hasNegative,
+    confidenceScore: 0.6,
+    note: 'Basic analysis (AI unavailable)'
+  };
+}
+
+function generateFallbackInterventions(cadet, situation, urgency) {
+  const interventions = {
+    high: {
+      immediateActions: ["Notify senior staff", "Increase supervision", "Schedule counseling"],
+      shortTermStrategies: ["Behavior modification plan", "Peer mentor assignment", "Family contact"],
+      timeframe: "immediate"
+    },
+    medium: {
+      immediateActions: ["Document incident", "Schedule mentorship session"],
+      shortTermStrategies: ["Monitor closely", "Adjust schedule if needed"],
+      timeframe: "days"
+    },
+    low: {
+      immediateActions: ["Continue monitoring", "Positive reinforcement"],
+      shortTermStrategies: ["Peer leadership opportunities"],
+      timeframe: "weeks"
+    }
+  };
+  
+  return interventions[urgency] || interventions.medium;
+}
+
+function generateBasicSchedule(staff, cadets, date) {
+  return {
+    message: "Basic schedule optimization available. Enable AI for advanced scheduling.",
+    recommendations: [
+      "Ensure adequate staff-to-cadet ratios",
+      "Schedule high-risk cadets during peak supervision hours",
+      "Balance academic and physical activities"
+    ]
+  };
+}
+
+function generateBasicPrediction(cadet, mentorshipLogs) {
+  const behaviorTrend = cadet.behavior_score >= 4 ? 'positive' : cadet.behavior_score <= 2 ? 'concerning' : 'stable';
+  
+  return {
+    hisetCompletionProbability: behaviorTrend === 'positive' ? 0.8 : behaviorTrend === 'concerning' ? 0.4 : 0.6,
+    workforcePlacementProbability: behaviorTrend === 'positive' ? 0.7 : behaviorTrend === 'concerning' ? 0.3 : 0.5,
+    programCompletionProbability: behaviorTrend === 'positive' ? 0.9 : behaviorTrend === 'concerning' ? 0.5 : 0.7,
+    riskFactors: behaviorTrend === 'concerning' ? ['Low behavior score', 'Need intervention'] : [],
+    protectiveFactors: behaviorTrend === 'positive' ? ['Good behavior score', 'Stable progress'] : [],
+    confidenceLevel: 'medium',
+    note: 'Basic prediction (AI unavailable)'
+  };
+}
 
 module.exports = router;

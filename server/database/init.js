@@ -5,6 +5,24 @@ const path = require('path');
 const dbPath = path.join(__dirname, 'yca_crm.db');
 const db = new sqlite3.Database(dbPath);
 
+// Initialize database tables
+db.serialize(() => {
+  // Sentiment analysis logs table
+  db.run(`
+    CREATE TABLE IF NOT EXISTS sentiment_logs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      cadet_id INTEGER,
+      text_analyzed TEXT NOT NULL,
+      sentiment TEXT NOT NULL,
+      urgency TEXT NOT NULL,
+      analysis_date TEXT NOT NULL,
+      FOREIGN KEY (cadet_id) REFERENCES cadets (id)
+    )
+  `);
+});
+
+module.exports = { db };
+
 const initialize = () => {
   // Staff table
   db.run(`
