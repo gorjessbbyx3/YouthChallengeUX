@@ -6,17 +6,23 @@ import { CadetList, CadetEdit, CadetCreate, CadetShow } from './components/Cadet
 import { StaffList, StaffEdit, StaffCreate } from './components/Staff';
 import { MentorshipList, MentorshipCreate } from './components/Mentorship';
 import { InventoryList, InventoryEdit, InventoryCreate } from './components/Inventory';
-import { EventList, EventCreate, EventEdit } from './components/Events';
+import { EventList, EventEdit, EventCreate } from './components/Events';
+import { AssignmentList, AssignmentEdit, AssignmentCreate, AssignmentShow } from './components/Assignments';
+import { Reports } from './components/Reports';
+import { AIAssistant } from './components/AIAssistant';
 import { authProvider } from './authProvider';
 import { Layout } from './Layout';
-import { AIAssistant } from './components/AIAssistant';
 
 // Icons
-import PeopleIcon from '@mui/icons-material/People';
-import PersonIcon from '@mui/icons-material/Person';
-import ChatIcon from '@mui/icons-material/Chat';
-import InventoryIcon from '@mui/icons-material/Inventory';
-import EventIcon from '@mui/icons-material/Event';
+import {
+  PeopleAlt as PeopleIcon,
+  Person as PersonIcon,
+  Chat as ChatIcon,
+  Inventory as InventoryIcon,
+  Event as EventIcon,
+  Assignment as AssignmentIcon,
+  Analytics as AnalyticsIcon
+} from '@mui/icons-material';
 
 const dataProvider = jsonServerProvider('/api');
 
@@ -69,6 +75,21 @@ const App = () => (
       options={{ label: 'Events' }}
     />
         <Resource name="ai-assistant" list={AIAssistant} />
+            <Resource
+        name="assignments"
+        list={AssignmentList}
+        edit={AssignmentEdit}
+        create={AssignmentCreate}
+        show={AssignmentShow}
+        icon={AssignmentIcon}
+        options={{ label: 'Assignments' }}
+    />
+    <Resource
+        name="reports"
+        list={Reports}
+        icon={AnalyticsIcon}
+        options={{ label: 'Reports' }}
+    />
       </Admin>
 );
 

@@ -1,43 +1,48 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import {
   Box,
   Paper,
+  Typography,
   TextField,
   Button,
-  Typography,
   List,
   ListItem,
   ListItemText,
+  Avatar,
   Chip,
-  CircularProgress,
   Alert,
+  CircularProgress,
+  Divider,
   Card,
   CardContent,
-  Divider
+  Grid
 } from '@mui/material';
 import {
   Send as SendIcon,
   Psychology as PsychologyIcon,
-  AutoAwesome as AIIcon
+  SmartToy as AIIcon,
+  Person as PersonIcon,
+  Analytics as AnalyticsIcon,
+  Warning as WarningIcon
 } from '@mui/icons-material';
 import axios from 'axios';
 
 export const AIAssistant = () => {
   const [messages, setMessages] = useState([
     {
-      type: 'assistant',
-      content: 'Hello! I\'m Grok, your AI assistant for the YCA CRM system. I can help with cadet management, sentiment analysis, intervention recommendations, schedule optimization, and more. How can I assist you today?',
-      timestamp: new Date().toISOString()
+      id: 1,
+      type: 'ai',
+      content: 'Hello! I\'m your YCA CRM AI Assistant powered by Grok. I can help you with cadet management, behavioral analysis, academic tracking, and system insights. How can I assist you today?',
+      timestamp: new Date()
     }
   ]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
-  const [context, setContext] = useState('general');
+  const [sentimentResult, setSentimentResult] = useState(null);
   const messagesEndRef = useRef(null);
 
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
   useEffect(() => {
@@ -45,42 +50,65 @@ export const AIAssistant = () => {
   }, [messages]);
 
   const sendMessage = async () => {
-    if (!input.trim()) return;
+    if (!input.trim() || loading) return;
 
     const userMessage = {
+      id: Date.now(),
       type: 'user',
       content: input,
-      timestamp: new Date().toISOString()
+      timestamp: new Date()
     };
 
     setMessages(prev => [...prev, userMessage]);
-    setLoading(true);
     setInput('');
+    setLoading(true);
 
     try {
       const token = localStorage.getItem('auth');
       const response = await axios.post('/api/ai/chat', {
         message: input,
-        context
+        context: 'yca_crm'
       }, {
         headers: { Authorization: `Bearer ${token}` }
       });
 
-      const assistantMessage = {
-        type: 'assistant',
+      const aiMessage = {
+        id: Date.now() + 1,
+        type: 'ai',
         content: response.data.response,
-        suggestions: response.data.suggestions,
-        timestamp: new Date().toISOString()
+        timestamp: new Date()
       };
 
-      setMessages(prev => [...prev, assistantMessage]);
+      setMessages(prev => [...prev, aiMessage]);
     } catch (error) {
       const errorMessage = {
-        type: 'error',
-        content: 'Sorry, I encountered an error. Please try again.',
-        timestamp: new Date().toISOString()
+        id: Date.now() + 1,
+        type: 'ai',
+        content: 'I apologize, but I encountered an error. Please try again or contact your system administrator.',
+        timestamp: new Date()
       };
       setMessages(prev => [...prev, errorMessage]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const analyzeSentiment = async (text) => {
+    if (!text.trim()) return;
+
+    setLoading(true);
+    try {
+      const token = localStorage.getItem('auth');
+      const response = await axios.post('/api/ai/analyze-sentiment', {
+        text: text,
+        type: 'general_text'
+      }, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      setSentimentResult(response.data);
+    } catch (error) {
+      console.error('Sentiment analysis error:', error);
     } finally {
       setLoading(false);
     }
@@ -93,158 +121,96 @@ export const AIAssistant = () => {
     }
   };
 
-  const analyzeSentiment = async (text) => {
-    try {
-      const token = localStorage.getItem('auth');
-      const response = await axios.post('/api/ai/analyze-sentiment', {
-        text
-      }, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-
-      const analysisMessage = {
-        type: 'analysis',
-        content: 'Sentiment Analysis Results:',
-        analysis: response.data,
-        timestamp: new Date().toISOString()
-      };
-
-      setMessages(prev => [...prev, analysisMessage]);
-    } catch (error) {
-      console.error('Sentiment analysis error:', error);
-    }
-  };
-
   const quickActions = [
-    { label: 'Cadet Help', context: 'cadet' },
-    { label: 'Staff Support', context: 'staff' },
-    { label: 'Reports', context: 'reports' },
-    { label: 'Schedule', context: 'schedule' }
+    { label: 'Analyze High-Risk Cadets', query: 'Show me insights about our high-risk cadets and intervention strategies' },
+    { label: 'HiSET Progress Report', query: 'Generate a summary of current HiSET completion rates and recommendations' },
+    { label: 'Inventory Alerts', query: 'What inventory items need attention and restocking?' },
+    { label: 'Mentorship Effectiveness', query: 'Analyze the effectiveness of our mentorship programs' }
   ];
 
   return (
     <Box sx={{ height: '100vh', display: 'flex', flexDirection: 'column', p: 2 }}>
       <Typography variant="h4" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
         <AIIcon color="primary" />
-        Grok AI Assistant
+        AI Assistant (Grok)
       </Typography>
 
-      {/* Context Selection */}
-      <Box sx={{ mb: 2 }}>
-        <Typography variant="body2" gutterBottom>
-          Context:
-        </Typography>
-        <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-          {quickActions.map((action) => (
-            <Chip
-              key={action.context}
-              label={action.label}
-              variant={context === action.context ? 'filled' : 'outlined'}
-              onClick={() => setContext(action.context)}
-              color="primary"
-            />
-          ))}
-        </Box>
-      </Box>
+      {/* Quick Actions */}
+      <Card sx={{ mb: 2 }}>
+        <CardContent>
+          <Typography variant="h6" gutterBottom>
+            Quick Actions
+          </Typography>
+          <Grid container spacing={1}>
+            {quickActions.map((action, index) => (
+              <Grid item key={index}>
+                <Chip
+                  label={action.label}
+                  onClick={() => setInput(action.query)}
+                  variant="outlined"
+                  size="small"
+                />
+              </Grid>
+            ))}
+          </Grid>
+        </CardContent>
+      </Card>
 
       {/* Messages */}
       <Paper 
         sx={{ 
           flex: 1, 
-          p: 2, 
-          overflowY: 'auto',
-          maxHeight: 'calc(100vh - 250px)'
+          overflow: 'auto', 
+          p: 1, 
+          mb: 2,
+          maxHeight: '60vh'
         }}
       >
         <List>
-          {messages.map((message, index) => (
-            <ListItem key={index} sx={{ flexDirection: 'column', alignItems: 'flex-start' }}>
-              <Box sx={{ 
-                alignSelf: message.type === 'user' ? 'flex-end' : 'flex-start',
-                maxWidth: '80%',
-                width: '100%'
-              }}>
-                <Paper
-                  sx={{
-                    p: 2,
-                    backgroundColor: message.type === 'user' ? 'primary.main' : 
-                                   message.type === 'error' ? 'error.light' :
-                                   message.type === 'analysis' ? 'info.light' : 'grey.100',
-                    color: message.type === 'user' ? 'white' : 'inherit'
-                  }}
+          {messages.map((message) => (
+            <ListItem
+              key={message.id}
+              sx={{
+                display: 'flex',
+                flexDirection: message.type === 'user' ? 'row-reverse' : 'row',
+                alignItems: 'flex-start'
+              }}
+            >
+              <Avatar
+                sx={{
+                  bgcolor: message.type === 'user' ? 'primary.main' : 'secondary.main',
+                  mx: 1
+                }}
+              >
+                {message.type === 'user' ? <PersonIcon /> : <AIIcon />}
+              </Avatar>
+              <Paper
+                sx={{
+                  p: 2,
+                  maxWidth: '70%',
+                  bgcolor: message.type === 'user' ? 'primary.light' : 'grey.100'
+                }}
+              >
+                <Typography variant="body1" sx={{ whiteSpace: 'pre-wrap' }}>
+                  {message.content}
+                </Typography>
+                <Typography
+                  variant="caption"
+                  sx={{ display: 'block', mt: 1, opacity: 0.7 }}
                 >
-                  <Typography variant="body1">
-                    {message.content}
-                  </Typography>
-                  
-                  {message.type === 'analysis' && message.analysis && (
-                    <Card sx={{ mt: 2 }}>
-                      <CardContent>
-                        <Typography variant="h6" gutterBottom>
-                          <PsychologyIcon sx={{ mr: 1, verticalAlign: 'middle' }} />
-                          Analysis Results
-                        </Typography>
-                        <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
-                          <Chip 
-                            label={`Sentiment: ${message.analysis.sentiment}`}
-                            color={message.analysis.sentiment === 'positive' ? 'success' : 
-                                   message.analysis.sentiment === 'negative' ? 'error' : 'default'}
-                          />
-                          <Chip 
-                            label={`Urgency: ${message.analysis.urgency}`}
-                            color={message.analysis.urgency === 'high' ? 'error' : 
-                                   message.analysis.urgency === 'medium' ? 'warning' : 'success'}
-                          />
-                        </Box>
-                        {message.analysis.recommendations && (
-                          <Box>
-                            <Typography variant="subtitle2" gutterBottom>
-                              Recommendations:
-                            </Typography>
-                            {message.analysis.recommendations.map((rec, i) => (
-                              <Typography key={i} variant="body2" sx={{ ml: 2 }}>
-                                • {rec}
-                              </Typography>
-                            ))}
-                          </Box>
-                        )}
-                      </CardContent>
-                    </Card>
-                  )}
-                  
-                  {message.suggestions && (
-                    <Box sx={{ mt: 2 }}>
-                      <Typography variant="body2" color="text.secondary" gutterBottom>
-                        Suggestions:
-                      </Typography>
-                      <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-                        {message.suggestions.map((suggestion, i) => (
-                          <Chip
-                            key={i}
-                            label={suggestion}
-                            size="small"
-                            variant="outlined"
-                            onClick={() => setInput(suggestion)}
-                          />
-                        ))}
-                      </Box>
-                    </Box>
-                  )}
-                  
-                  <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
-                    {new Date(message.timestamp).toLocaleTimeString()}
-                  </Typography>
-                </Paper>
-              </Box>
+                  {message.timestamp.toLocaleTimeString()}
+                </Typography>
+              </Paper>
             </ListItem>
           ))}
           {loading && (
             <ListItem>
+              <Avatar sx={{ bgcolor: 'secondary.main', mx: 1 }}>
+                <AIIcon />
+              </Avatar>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                 <CircularProgress size={20} />
-                <Typography variant="body2" color="text.secondary">
-                  AI is thinking...
-                </Typography>
+                <Typography variant="body2">Thinking...</Typography>
               </Box>
             </ListItem>
           )}
@@ -252,8 +218,50 @@ export const AIAssistant = () => {
         <div ref={messagesEndRef} />
       </Paper>
 
+      {/* Sentiment Analysis Results */}
+      {sentimentResult && (
+        <Card sx={{ mb: 2 }}>
+          <CardContent>
+            <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <AnalyticsIcon />
+              Sentiment Analysis Results
+            </Typography>
+            <Grid container spacing={2}>
+              <Grid item xs={12} sm={6}>
+                <Typography variant="body2">
+                  <strong>Sentiment:</strong> {sentimentResult.sentiment}
+                </Typography>
+                <Typography variant="body2">
+                  <strong>Urgency:</strong> {sentimentResult.urgency}
+                </Typography>
+                <Typography variant="body2">
+                  <strong>Confidence:</strong> {(sentimentResult.confidenceScore * 100).toFixed(1)}%
+                </Typography>
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                {sentimentResult.riskFactors?.length > 0 && (
+                  <Alert severity="warning" sx={{ mb: 1 }}>
+                    <strong>Risk Factors:</strong> {sentimentResult.riskFactors.join(', ')}
+                  </Alert>
+                )}
+                {sentimentResult.recommendations?.length > 0 && (
+                  <Box>
+                    <Typography variant="body2" sx={{ fontWeight: 'bold' }}>Recommendations:</Typography>
+                    {sentimentResult.recommendations.map((rec, index) => (
+                      <Typography key={index} variant="body2" sx={{ ml: 1 }}>
+                        • {rec}
+                      </Typography>
+                    ))}
+                  </Box>
+                )}
+              </Grid>
+            </Grid>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Input */}
-      <Box sx={{ mt: 2, display: 'flex', gap: 1 }}>
+      <Box sx={{ display: 'flex', gap: 1 }}>
         <TextField
           fullWidth
           multiline
@@ -275,12 +283,13 @@ export const AIAssistant = () => {
       </Box>
 
       {/* Quick Analysis */}
-      <Box sx={{ mt: 1 }}>
+      <Box sx={{ mt: 1, display: 'flex', gap: 1 }}>
         <Button
           size="small"
           onClick={() => analyzeSentiment(input)}
-          disabled={!input.trim()}
+          disabled={!input.trim() || loading}
           startIcon={<PsychologyIcon />}
+          variant="outlined"
         >
           Analyze Sentiment
         </Button>
