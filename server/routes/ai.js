@@ -5,6 +5,32 @@ const { db } = require('../database/init');
 const { authenticateToken } = require('../middleware/auth');
 const router = express.Router();
 
+// Replit AI Integration (as fallback)
+async function callReplitAI(prompt) {
+  try {
+    // Use Replit's AI service if available
+    const response = await fetch('https://api.replit.com/v1/ai/chat', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${process.env.REPLIT_API_TOKEN || ''}`
+      },
+      body: JSON.stringify({
+        messages: [{ role: 'user', content: prompt }],
+        model: 'replit-code-v1'
+      })
+    });
+    
+    if (response.ok) {
+      const data = await response.json();
+      return data.choices?.[0]?.message?.content || 'AI response unavailable';
+    }
+  } catch (error) {
+    console.log('Replit AI unavailable:', error.message);
+  }
+  return null;
+}
+
 const genAI = process.env.API_KEY ? new GoogleGenerativeAI(process.env.API_KEY) : null;
 
 // Enhanced AI Assistant for YCA CRM
@@ -13,6 +39,18 @@ router.post('/chat', authenticateToken, async (req, res) => {
     const { message, context = 'general', cadetId, staffId } = req.body;
 
     if (!genAI) {
+      // Try Replit AI as fallback
+      const replitResponse = await callReplitAI(fullPrompt);
+      if (replitResponse) {
+        return res.json({
+          response: replitResponse,
+          context,
+          suggestions: generateSuggestions(context, message),
+          timestamp: new Date().toISOString(),
+          source: 'replit-ai'
+        });
+      }
+      
       return res.json({
         response: "AI Assistant is currently unavailable. Please configure the Google Gemini API key in your environment.",
         suggestions: ["Check system status", "Contact administrator", "Try again later"]
