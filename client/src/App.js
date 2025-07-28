@@ -19,6 +19,9 @@ import { EventList, EventEdit, EventCreate } from './components/Events';
 import { Reports } from './components/Reports';
 import { AssignmentList, AssignmentEdit, AssignmentCreate, AssignmentShow } from './components/Assignments';
 import { Scheduling } from './components/Scheduling';
+import { AIAssistant } from './components/AIAssistant';
+import { BehavioralTracking } from './components/BehavioralTracking';
+import { AcademicTracking } from './components/AcademicTracking';
 import { authProvider } from './authProvider';
 
 // Icons

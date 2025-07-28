@@ -1,4 +1,3 @@
-
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
@@ -30,11 +29,13 @@ app.use('/api/reports', require('./routes/reports'));
 app.use('/api/scheduling', require('./routes/scheduling'));
 app.use('/api/compatibility', require('./routes/compatibility'));
 app.use('/api/ai', require('./routes/ai'));
+app.use('/api/behavioral-tracking', require('./routes/behavioral-tracking'));
+app.use('/api/academic-tracking', require('./routes/academic-tracking'));
 
 // Serve static files in production
 if (process.env.NODE_ENV === 'production') {
   app.use(express.static(path.join(__dirname, '../client/build')));
-  
+
   app.get('*', (req, res) => {
     res.sendFile(path.join(__dirname, '../client/build', 'index.html'));
   });

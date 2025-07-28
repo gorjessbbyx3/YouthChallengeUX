@@ -1,4 +1,3 @@
-
 const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
 
@@ -58,6 +57,54 @@ db.serialize(() => {
       points INTEGER DEFAULT 0,
       date_achieved TEXT DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (cadet_id) REFERENCES cadets (id)
+    )
+  `);
+
+  // Create schedules table
+  db.run(`
+    CREATE TABLE IF NOT EXISTS schedules (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      staff_id INTEGER NOT NULL,
+      date DATE NOT NULL,
+      start_time TIME NOT NULL,
+      end_time TIME NOT NULL,
+      task_type VARCHAR(50) NOT NULL,
+      location VARCHAR(100),
+      notes TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (staff_id) REFERENCES staff(id) ON DELETE CASCADE
+    )
+  `);
+
+  // Create behavioral tracking table
+  db.run(`
+    CREATE TABLE IF NOT EXISTS behavioral_tracking (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      cadet_id INTEGER NOT NULL,
+      behavior_type VARCHAR(100) NOT NULL,
+      severity INTEGER NOT NULL CHECK(severity >= 1 AND severity <= 10),
+      context TEXT,
+      intervention TEXT,
+      notes TEXT,
+      date DATE NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (cadet_id) REFERENCES cadets(id) ON DELETE CASCADE
+    )
+  `);
+
+  // Create academic tracking table
+  db.run(`
+    CREATE TABLE IF NOT EXISTS academic_tracking (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      cadet_id INTEGER NOT NULL,
+      subject VARCHAR(100) NOT NULL,
+      assignment_type VARCHAR(50) NOT NULL,
+      score INTEGER NOT NULL,
+      max_score INTEGER NOT NULL DEFAULT 100,
+      date DATE NOT NULL,
+      notes TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (cadet_id) REFERENCES cadets(id) ON DELETE CASCADE
     )
   `);
 });
