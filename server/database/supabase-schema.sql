@@ -1,4 +1,3 @@
-
 -- YCA CRM Database Schema for Supabase
 
 -- Enable UUID extension
@@ -214,23 +213,49 @@ CREATE TABLE IF NOT EXISTS mentorship_logs (
 
 -- Events table
 CREATE TABLE IF NOT EXISTS events (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id SERIAL PRIMARY KEY,
     title VARCHAR(255) NOT NULL,
     description TEXT,
-    event_type VARCHAR(100) NOT NULL,
-    start_date TIMESTAMP WITH TIME ZONE NOT NULL,
-    end_date TIMESTAMP WITH TIME ZONE NOT NULL,
+    event_type VARCHAR(50) NOT NULL CHECK (event_type IN ('community_service', 'recruitment', 'drill', 'class', 'counseling', 'ceremony', 'training', 'other')),
+    start_date TIMESTAMP NOT NULL,
+    end_date TIMESTAMP NOT NULL,
     location VARCHAR(255),
-    max_participants INTEGER,
     required_staff INTEGER DEFAULT 1,
-    assigned_staff UUID[],
-    participant_ids UUID[],
-    status VARCHAR(20) DEFAULT 'planned',
-    equipment_needed TEXT[],
-    budget DECIMAL(10,2),
-    created_by UUID REFERENCES staff(id),
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    community_service_hours DECIMAL(5,2) DEFAULT 0,
+    status VARCHAR(20) DEFAULT 'scheduled' CHECK (status IN ('scheduled', 'in_progress', 'completed', 'cancelled')),
+    created_by INTEGER REFERENCES staff(id),
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Event staff assignments table
+CREATE TABLE IF NOT EXISTS event_staff_assignments (
+    id SERIAL PRIMARY KEY,
+    event_id INTEGER REFERENCES events(id) ON DELETE CASCADE,
+    staff_id INTEGER REFERENCES staff(id) ON DELETE CASCADE,
+    role VARCHAR(50) DEFAULT 'participant',
+    assigned_at TIMESTAMP DEFAULT NOW(),
+    UNIQUE(event_id, staff_id)
+);
+
+-- Event cadet assignments table
+CREATE TABLE IF NOT EXISTS event_cadet_assignments (
+    id SERIAL PRIMARY KEY,
+    event_id INTEGER REFERENCES events(id) ON DELETE CASCADE,
+    cadet_id INTEGER REFERENCES cadets(id) ON DELETE CASCADE,
+    attendance_status VARCHAR(20) DEFAULT 'assigned' CHECK (attendance_status IN ('assigned', 'present', 'absent', 'excused')),
+    assigned_at TIMESTAMP DEFAULT NOW(),
+    UNIQUE(event_id, cadet_id)
+);
+
+-- Event reminders log table
+CREATE TABLE IF NOT EXISTS event_reminders (
+    id SERIAL PRIMARY KEY,
+    event_id INTEGER REFERENCES events(id) ON DELETE CASCADE,
+    reminder_type VARCHAR(50) NOT NULL,
+    sent_to TEXT NOT NULL, -- JSON array of email addresses
+    sent_at TIMESTAMP DEFAULT NOW(),
+    status VARCHAR(20) DEFAULT 'sent' CHECK (status IN ('sent', 'failed', 'pending'))
 );
 
 -- Inventory table
@@ -253,6 +278,13 @@ CREATE TABLE IF NOT EXISTS inventory (
 );
 
 -- Create indexes for better performance
+CREATE INDEX IF NOT EXISTS idx_events_start_date ON events(start_date);
+CREATE INDEX IF NOT EXISTS idx_events_type ON events(event_type);
+CREATE INDEX IF NOT EXISTS idx_events_status ON events(status);
+CREATE INDEX IF NOT EXISTS idx_event_staff_assignments_event ON event_staff_assignments(event_id);
+CREATE INDEX IF NOT EXISTS idx_event_staff_assignments_staff ON event_staff_assignments(staff_id);
+CREATE INDEX IF NOT EXISTS idx_event_cadet_assignments_event ON event_cadet_assignments(event_id);
+CREATE INDEX IF NOT EXISTS idx_event_cadet_assignments_cadet ON event_cadet_assignments(cadet_id);
 CREATE INDEX IF NOT EXISTS idx_cadets_status ON cadets(status);
 CREATE INDEX IF NOT EXISTS idx_cadets_platoon ON cadets(platoon);
 CREATE INDEX IF NOT EXISTS idx_staff_active ON staff(is_active);
@@ -261,7 +293,6 @@ CREATE INDEX IF NOT EXISTS idx_academic_cadet_date ON academic_tracking(cadet_id
 CREATE INDEX IF NOT EXISTS idx_mentorship_cadet ON mentorship_relationships(cadet_id);
 CREATE INDEX IF NOT EXISTS idx_mentorship_mentor ON mentorship_relationships(mentor_id);
 CREATE INDEX IF NOT EXISTS idx_mentorship_status ON mentorship_relationships(status);
-CREATE INDEX IF NOT EXISTS idx_events_date ON events(start_date);
 CREATE INDEX IF NOT EXISTS idx_documents_category ON documents(category);
 
 -- Enable Row Level Security (RLS) for all tables
@@ -276,6 +307,9 @@ ALTER TABLE mentorship_relationships ENABLE ROW LEVEL SECURITY;
 ALTER TABLE mentorship_logs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE inventory ENABLE ROW LEVEL SECURITY;
+ALTER TABLE event_staff_assignments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE event_cadet_assignments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE event_reminders ENABLE ROW LEVEL SECURITY;
 
 -- Create basic RLS policies (adjust based on your authentication needs)
 -- For demonstration, allowing all authenticated users to access data
@@ -323,6 +357,15 @@ CREATE POLICY "Allow authenticated access to events" ON events
 CREATE POLICY "Allow authenticated access to inventory" ON inventory
     FOR ALL USING (auth.role() = 'authenticated');
 
+CREATE POLICY "Allow authenticated access to event_staff_assignments" ON event_staff_assignments
+    FOR ALL USING (auth.role() = 'authenticated');
+
+CREATE POLICY "Allow authenticated access to event_cadet_assignments" ON event_cadet_assignments
+    FOR ALL USING (auth.role() = 'authenticated');
+
+CREATE POLICY "Allow authenticated access to event_reminders" ON event_reminders
+    FOR ALL USING (auth.role() = 'authenticated');
+
 -- Update triggers for updated_at columns
 CREATE OR REPLACE FUNCTION update_updated_at_column()
 RETURNS TRIGGER AS $$
@@ -358,10 +401,19 @@ CREATE TRIGGER update_mentorship_relationships_updated_at BEFORE UPDATE ON mento
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 CREATE TRIGGER update_mentorship_logs_updated_at BEFORE UPDATE ON mentorship_logs 
-    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+    FOR EACH ROW EXECUTE FUNCTION update_mentorship_updated_at_column();
 
 CREATE TRIGGER update_events_updated_at BEFORE UPDATE ON events 
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 CREATE TRIGGER update_inventory_updated_at BEFORE UPDATE ON inventory 
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_event_staff_assignments_updated_at BEFORE UPDATE ON event_staff_assignments
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_event_cadet_assignments_updated_at BEFORE UPDATE ON event_cadet_assignments
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_event_reminders_updated_at BEFORE UPDATE ON event_reminders
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();

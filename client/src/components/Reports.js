@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import {
   Box,
@@ -42,11 +41,11 @@ export const Reports = () => {
   const generateReport = async () => {
     setLoading(true);
     setError(null);
-    
+
     try {
       const token = localStorage.getItem('auth');
       const headers = { Authorization: `Bearer ${token}` };
-      
+
       const response = await axios.get(`/api/reports/${reportType}`, { headers });
       setReportData(response.data);
     } catch (err) {
@@ -64,7 +63,7 @@ export const Reports = () => {
         headers: { Authorization: `Bearer ${token}` },
         responseType: 'blob'
       });
-      
+
       const blob = new Blob([response.data], { type: response.headers['content-type'] });
       saveAs(blob, `${reportType}_report.${format}`);
     } catch (err) {
@@ -228,6 +227,48 @@ export const Reports = () => {
     );
   };
 
+  const renderEventReport = () => {
+    if (!reportData) return null;
+
+    // Example data (replace with actual event data)
+    const eventData = {
+      labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
+      datasets: [{
+        label: 'Events Held',
+        data: [12, 19, 3, 5, 2, 3],
+        backgroundColor: 'rgba(54, 162, 235, 0.2)',
+        borderColor: 'rgba(54, 162, 235, 1)',
+        borderWidth: 1
+      }]
+    };
+
+    return (
+      <Grid container spacing={3}>
+        <Grid item xs={12} md={6}>
+          <Card>
+            <CardContent>
+              <Typography variant="h6" gutterBottom>
+                Events Over Time
+              </Typography>
+              <Line data={eventData} options={{ responsive: true }} />
+            </CardContent>
+          </Card>
+        </Grid>
+        <Grid item xs={12} md={6}>
+          <Card>
+            <CardContent>
+              <Typography variant="h6" gutterBottom>
+                Upcoming Events
+              </Typography>
+              {/* Replace with actual upcoming events data */}
+              <Typography variant="body1">No upcoming events scheduled.</Typography>
+            </CardContent>
+          </Card>
+        </Grid>
+      </Grid>
+    );
+  };
+
   const renderContent = () => {
     if (loading) {
       return (
@@ -244,6 +285,8 @@ export const Reports = () => {
         return renderAcademicReport();
       case 'placement':
         return renderPlacementReport();
+      case 'events':
+        return renderEventReport();
       default:
         return <Typography>Select a report type</Typography>;
     }
@@ -274,6 +317,7 @@ export const Reports = () => {
             <MenuItem value="placement">Placement Outcomes</MenuItem>
             <MenuItem value="attendance">Attendance Reports</MenuItem>
             <MenuItem value="mentorship">Mentorship Effectiveness</MenuItem>
+            <MenuItem value="events">Event Reports</MenuItem>
           </Select>
         </FormControl>
 
