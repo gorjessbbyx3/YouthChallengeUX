@@ -22,6 +22,7 @@ import { Scheduling } from './components/Scheduling';
 import { AIAssistant } from './components/AIAssistant';
 import { BehavioralTracking } from './components/BehavioralTracking';
 import { AcademicTracking } from './components/AcademicTracking';
+import { Communications } from './components/Communications';
 import { authProvider } from './authProvider';
 
 // Icons
@@ -111,6 +112,12 @@ const App = () => (
         options={{ label: 'Scheduling' }}
     />
             <Resource name="scheduling-analytics" list={SchedulingAnalytics} options={{ label: 'Schedule Analytics' }} />
+        <Resource 
+          name="communications" 
+          list={Communications} 
+          icon={ChatIcon}
+          options={{ label: 'Family Communications' }} 
+        />
       </Admin>
 );
 

@@ -244,6 +244,42 @@ const initialize = () => {
     )
   `);
 
+  // Communications table
+  db.run(`
+    CREATE TABLE IF NOT EXISTS communications (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      cadet_id INTEGER NOT NULL,
+      recipient_type VARCHAR(50) NOT NULL,
+      recipient_contact VARCHAR(255) NOT NULL,
+      method VARCHAR(20) NOT NULL,
+      subject VARCHAR(255) NOT NULL,
+      message TEXT NOT NULL,
+      priority VARCHAR(20) DEFAULT 'normal',
+      status VARCHAR(20) DEFAULT 'sent',
+      sent_by INTEGER,
+      follow_up_required BOOLEAN DEFAULT 0,
+      follow_up_date DATE,
+      follow_up_completed BOOLEAN DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (cadet_id) REFERENCES cadets(id) ON DELETE CASCADE,
+      FOREIGN KEY (sent_by) REFERENCES staff(id)
+    )
+  `);
+
+  // Communication metrics table for analytics
+  db.run(`
+    CREATE TABLE IF NOT EXISTS communication_metrics (
+      cadet_id INTEGER PRIMARY KEY,
+      total_communications INTEGER DEFAULT 0,
+      last_communication DATETIME,
+      email_count INTEGER DEFAULT 0,
+      sms_count INTEGER DEFAULT 0,
+      phone_count INTEGER DEFAULT 0,
+      urgent_count INTEGER DEFAULT 0,
+      FOREIGN KEY (cadet_id) REFERENCES cadets(id) ON DELETE CASCADE
+    )
+  `);
+
   console.log('Database initialized successfully');
 };
 
