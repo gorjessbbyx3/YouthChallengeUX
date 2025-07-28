@@ -107,6 +107,50 @@ db.serialize(() => {
       FOREIGN KEY (cadet_id) REFERENCES cadets(id) ON DELETE CASCADE
     )
   `);
+
+  // Inventory table
+  db.run(`
+    CREATE TABLE IF NOT EXISTS inventory (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      quantity INTEGER DEFAULT 0,
+      threshold INTEGER DEFAULT 0,
+      category TEXT,
+      unit_cost REAL DEFAULT 0,
+      last_restocked TEXT,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  // Usage logs table for tracking inventory consumption
+  db.run(`
+    CREATE TABLE IF NOT EXISTS usage_logs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      item_id INTEGER NOT NULL,
+      quantity_used INTEGER NOT NULL,
+      purpose TEXT,
+      staff_id INTEGER,
+      date TEXT DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (item_id) REFERENCES inventory (id),
+      FOREIGN KEY (staff_id) REFERENCES staff (id)
+    )
+  `);
+
+  // Restock logs table for tracking inventory replenishment
+  db.run(`
+    CREATE TABLE IF NOT EXISTS restock_logs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      item_id INTEGER NOT NULL,
+      quantity_added INTEGER NOT NULL,
+      cost REAL,
+      supplier TEXT,
+      staff_id INTEGER,
+      date TEXT DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (item_id) REFERENCES inventory (id),
+      FOREIGN KEY (staff_id) REFERENCES staff (id)
+    )
+  `);
 });
 
 module.exports = { db };
