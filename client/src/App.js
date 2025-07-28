@@ -21,6 +21,8 @@ import { DocumentManagement } from './components/DocumentManagement';
 import { authProvider } from './authProvider';
 import { InventoryList, InventoryEdit, InventoryCreate, InventoryKanban } from './components/Inventory';
 import { CadetList, CadetEdit, CadetCreate, CadetShow, CadetDashboard } from './components/CadetsManagement';
+import { InventoryForecasting } from './components/InventoryForecasting';
+import { BehaviorPrediction } from './components/BehaviorPrediction';
 
 // Icons
 import {

@@ -293,8 +293,15 @@ router.get('/predictive-analytics', authenticateToken, async (req, res) => {
 });
 
 // AI-powered inventory forecasting
-router.get('/inventory-forecast', authenticateToken, (req, res) => {
-  db.all('SELECT * FROM inventory', (err, items) => {
+router.get('/inventory-forecast', authenticateToken, async (req, res) => {
+  try {
+    const { data: items, error } = await supabase
+      .from('inventory')
+      .select('*');
+
+    if (error) {
+      throw error;
+    }
     if (err) {
       return res.status(500).json({ error: err.message });
     }
@@ -342,27 +349,48 @@ router.get('/inventory-forecast', authenticateToken, (req, res) => {
     });
 
     res.json(forecast);
-  });
+  } catch (error) {
+    console.error('Error generating inventory forecast:', error);
+    res.status(500).json({ error: 'Failed to generate forecast' });
+  }
 });
 
 // Behavior prediction using AI
-router.get('/behavior-prediction', authenticateToken, (req, res) => {
-  db.all(`
-    SELECT c.*, 
-           COUNT(bt.id) as incident_count,
-           AVG(bt.severity) as avg_severity,
-           MAX(bt.incident_date) as last_incident
-    FROM cadets c
-    LEFT JOIN behavioral_tracking bt ON c.id = bt.cadet_id
-    WHERE c.status = 'active'
-    GROUP BY c.id
-  `, (err, cadets) => {
-    if (err) {
-      return res.status(500).json({ error: err.message });
+router.get('/behavior-prediction', authenticateToken, async (req, res) => {
+  try {
+    const { data: cadets, error } = await supabase
+      .from('cadets')
+      .select(`
+        *,
+        behavioral_tracking (
+          id,
+          severity,
+          incident_date
+        )
+      `)
+      .eq('status', 'active');
+
+    if (error) {
+      throw error;
     }
 
+    // Process the data to match the expected format
+    const processedCadets = cadets.map(cadet => {
+      const incidents = cadet.behavioral_tracking || [];
+      return {
+        ...cadet,
+        incident_count: incidents.length,
+        avg_severity: incidents.length > 0 
+          ? incidents.reduce((sum, inc) => sum + (inc.severity || 0), 0) / incidents.length 
+          : 0,
+        last_incident: incidents.length > 0 
+          ? new Date(Math.max(...incidents.map(inc => new Date(inc.incident_date).getTime())))
+          : null
+      };
+    });
+
     // AI behavior prediction model
-    const predictions = cadets.map(cadet => {
+    const predictions = processedCadets.map(cadet => {
       const behaviorScore = cadet.behavior_score || 1;
       const incidentCount = cadet.incident_count || 0;
       const avgSeverity = cadet.avg_severity || 0;
@@ -409,7 +437,10 @@ router.get('/behavior-prediction', authenticateToken, (req, res) => {
     });
 
     res.json(predictions);
-  });
+  } catch (error) {
+    console.error('Error generating behavior predictions:', error);
+    res.status(500).json({ error: 'Failed to generate predictions' });
+  }
 });
 
 function generateRestockRecommendations(item, daysUntilEmpty, needsRestock) {
