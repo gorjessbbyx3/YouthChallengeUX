@@ -19,6 +19,47 @@ db.serialize(() => {
       FOREIGN KEY (cadet_id) REFERENCES cadets (id)
     )
   `);
+
+  // Staff scheduling table
+  db.run(`
+    CREATE TABLE IF NOT EXISTS schedules (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      staff_id INTEGER NOT NULL,
+      date TEXT NOT NULL,
+      start_time TEXT NOT NULL,
+      end_time TEXT NOT NULL,
+      task_type TEXT NOT NULL,
+      location TEXT,
+      notes TEXT,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (staff_id) REFERENCES staff (id)
+    )
+  `);
+
+  // Room assignments table
+  db.run(`
+    CREATE TABLE IF NOT EXISTS room_assignments (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      cadet_id INTEGER NOT NULL,
+      room_number INTEGER NOT NULL,
+      bed_number INTEGER NOT NULL,
+      assigned_date TEXT DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (cadet_id) REFERENCES cadets (id)
+    )
+  `);
+
+  // Cadet milestones and rewards table
+  db.run(`
+    CREATE TABLE IF NOT EXISTS cadet_milestones (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      cadet_id INTEGER NOT NULL,
+      milestone_type TEXT NOT NULL,
+      description TEXT,
+      points INTEGER DEFAULT 0,
+      date_achieved TEXT DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (cadet_id) REFERENCES cadets (id)
+    )
+  `);
 });
 
 module.exports = { db };

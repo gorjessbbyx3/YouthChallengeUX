@@ -17,8 +17,8 @@ import { InventoryEdit } from './components/InventoryEdit';
 import { InventoryCreate } from './components/InventoryCreate';
 import { EventList, EventEdit, EventCreate } from './components/Events';
 import { Reports } from './components/Reports';
-import { AIAssistant } from './components/AIAssistant';
 import { AssignmentList, AssignmentEdit, AssignmentCreate, AssignmentShow } from './components/Assignments';
+import { Scheduling } from './components/Scheduling';
 import { authProvider } from './authProvider';
 
 // Icons
@@ -97,6 +97,15 @@ const App = () => (
         list={Reports}
         icon={AnalyticsIcon}
         options={{ label: 'Reports' }}
+    />
+          <Resource
+        name="scheduling"
+        list={Scheduling}
+        // edit={AssignmentEdit}
+        // create={AssignmentCreate}
+        // show={AssignmentShow}
+        icon={AssignmentIcon}
+        options={{ label: 'Scheduling' }}
     />
       </Admin>
 );

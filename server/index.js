@@ -27,6 +27,8 @@ app.use('/api/inventory', require('./routes/inventory'));
 app.use('/api/events', require('./routes/events'));
 app.use('/api/assignments', require('./routes/assignments'));
 app.use('/api/reports', require('./routes/reports'));
+app.use('/api/scheduling', require('./routes/scheduling'));
+app.use('/api/compatibility', require('./routes/compatibility'));
 app.use('/api/ai', require('./routes/ai'));
 
 // Serve static files in production
