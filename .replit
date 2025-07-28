@@ -9,9 +9,10 @@ channel = "stable-23_05"
 language = "nodejs"
 
 [deployment]
-run = ["node", "index.js"]
+run = ["sh", "-c", "node server/index.js"]
 deploymentTarget = "cloudrun"
 ignorePorts = false
+build = ["sh", "-c", "npm install && cd client && npm install && npm run build"]
 
 [workflows]
 runButton = "YCA CRM Development"
@@ -28,3 +29,45 @@ args = "npm install"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "npm run dev"
+
+[[workflows.workflow]]
+name = "Production Start"
+author = 43369170
+mode = "sequential"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "npm install"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd client && npm install && npm run build"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd .."
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "NODE_ENV=production node server/index.js"
+
+[[workflows.workflow]]
+name = "Production Start"
+author = 43369170
+mode = "sequential"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "npm install"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd client && npm install && npm run build"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd .."
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "NODE_ENV=production node server/index.js"

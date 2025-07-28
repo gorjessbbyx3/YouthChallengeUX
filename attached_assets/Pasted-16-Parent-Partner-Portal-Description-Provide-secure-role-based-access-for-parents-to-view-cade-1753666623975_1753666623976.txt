@@ -1,0 +1,64 @@
+16. Parent/Partner Portal
+•  Description: Provide secure, role-based access for parents to view cadet progress (e.g., HiSET status) and for partners (e.g., Kapolei businesses) to update job placement information. Includes dashboards for updates and communication logs.
+•  Purpose: Improve engagement with parents and partners, reducing staff communication time and enhancing cadet outcomes.
+•  Technical Implementation: Use React-admin with role-based access via JWT authentication, SQLite for access logs, and a Node.js/Express API for secure data retrieval. Parents have read-only access; partners can update placement data.
+•  Workflow Impact: Saves 0.5 hour per day by reducing manual emails or calls to parents and partners.
+•  YCA Alignment: Enhances 48% workforce and 19% education placements by streamlining partner coordination and family engagement.
+•  Psychology/Astrology Integration: Aligns with self-determination theory (relatedness), as family involvement supports cadet motivation.
+•  Additional Details:
+	•  User Interaction: Parents log in to view progress (e.g., “John: 80% HiSET progress”). Partners update job placement notes. Staff manage access.
+	•  Data Flow: User roles are stored in SQLite, authenticated via JWT, and data is served securely via API.
+	•  Scalability: Supports ~200 parents/partners, extensible for more.
+	•  Error Handling: Ensures secure access with JWT validation.
+
+17. Positive Reinforcement System
+•  Description: Track and reward cadet milestones (e.g., 20 service hours, HiSET completion) with digital badges or certificates. Displays achievements on cadet profiles and dashboards to motivate progress.
+•  Purpose: Encourage positive behavior changes by recognizing cadet achievements, improving engagement.
+•  Technical Implementation: Use SQLite for a Milestone model with fields like id, cadetId, badge, and date, React-admin for a badge interface, and a Node.js/Express API for awarding badges.
+•  Workflow Impact: Saves 0.5 hour per day by automating reward tracking, replacing manual recognition.
+•  YCA Alignment: Boosts cadet engagement, supporting 78% HiSET and 48% workforce outcomes.
+•  Psychology/Astrology Integration: Aligns with positive reinforcement (behavioral theory), rewarding progress to encourage good behavior and counter negative peer influences.
+•  Additional Details:
+	•  User Interaction: Staff award badges (e.g., “Service Star: 20 hours”) via cadet profiles. Cadets view achievements in the parent portal.
+	•  Data Flow: Milestones are stored in SQLite, updated via API, and displayed in the frontend.
+	•  Scalability: Handles thousands of milestones, extensible for new badge types.
+	•  Error Handling: Ensures badges are awarded only for verified milestones.
+
+18. Integration with External Tools
+•  Description: Sync schedules, events, and reminders with external tools like Google Calendar and email platforms. Supports automated notifications for staff, mentors, and partners to streamline communication.
+•  Purpose: Reduce manual updates across platforms, improving coordination efficiency.
+•  Technical Implementation: Use the Google Calendar API for syncing events, Nodemailer for email notifications, and a Node.js/Express API for integration logic. Store sync settings in SQLite.
+•  Workflow Impact: Saves 0.5 hour per day by automating external updates and reminders.
+•  YCA Alignment: Improves coordination for staff and mentors, supporting program efficiency.
+•  Psychology/Astrology Integration: Enhances staff efficiency, allowing more focus on cadet support, indirectly fostering a positive environment.
+•  Additional Details:
+	•  User Interaction: Staff enable Google Calendar sync or email reminders via settings. Events and meetings are automatically synced.
+	•  Data Flow: Event data is synced from SQLite to Google Calendar via API, with reminders sent via Nodemailer.
+	•  Scalability: Supports multiple integrations, extensible for new tools (e.g., SMS platforms).
+	•  Error Handling: Validates API credentials to ensure successful syncing.
+
+19. Data Analytics Dashboard
+•  Description: Visualize cadet outcomes (e.g., HiSET rates, placements), staff workload, and inventory trends using charts (e.g., bar, line). Provides insights for program improvement and funder reports.
+•  Purpose: Enable data-driven decisions to optimize program effectiveness and reporting.
+•  Technical Implementation: Use Chart.js for visualizations, SQLite queries for data aggregation, and React-admin for a dashboard interface. A Node.js/Express API serves analytics data.
+•  Workflow Impact: Saves 1 hour per week by automating data analysis and visualization.
+•  YCA Alignment: Informs DoD reports and program tweaks, supporting metrics like 9,000+ service hours.
+•  Psychology/Astrology Integration: Supports evidence-based interventions, enhancing cadet outcomes through informed staff actions.
+•  Additional Details:
+	•  User Interaction: Staff view charts (e.g., “HiSET Completion by Month”) on the dashboard, filter by time period, and export data.
+	•  Data Flow: Data is aggregated from SQLite tables (logs, cadets) via API and visualized in the frontend.
+	•  Scalability: Handles large datasets, extensible for new metrics.
+	•  Error Handling: Validates data for accurate visualizations.
+
+20. Offline Mode
+•  Description: Allow data entry (e.g., mentor logs, inventory updates) during internet outages, with automatic syncing when connectivity is restored. Ensures uninterrupted use in variable network conditions.
+•  Purpose: Enable staff to work during field activities or outages, maintaining program continuity.
+•  Technical Implementation: Use Workbox for offline caching, SQLite for local storage, and React-admin for a seamless offline interface. Sync data via a Node.js/Express API when online.
+•  Workflow Impact: Saves 0.5 hour per day by preventing disruptions during outages.
+•  YCA Alignment: Supports Kapolei’s variable connectivity, ensuring staff can manage tasks during events.
+•  Psychology/Astrology Integration: Ensures reliable access, reducing staff stress and supporting cadet engagement.
+•  Additional Details:
+	•  User Interaction: Staff enter data (e.g., mentor notes) offline; changes sync automatically when online.
+	•  Data Flow: Offline data is cached in SQLite, synced to the server via API when connected.
+	•  Scalability: Supports multiple users, with Workbox handling large caches.
+	•  Error Handling: Ensures data consistency during sync to prevent duplicates.
