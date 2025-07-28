@@ -32,6 +32,7 @@ app.use('/api/ai', require('./routes/ai'));
 app.use('/api/behavioral-tracking', require('./routes/behavioral-tracking'));
 app.use('/api/academic-tracking', require('./routes/academic-tracking'));
 app.use('/api/communications', require('./routes/communications'));
+app.use('/api/documents', require('./routes/documents'));
 
 // Serve static files in production
 if (process.env.NODE_ENV === 'production') {

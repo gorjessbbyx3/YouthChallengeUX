@@ -14,6 +14,7 @@
   "dependencies": {
     "@google/generative-ai": "^0.1.0",
     "@huggingface/transformers": "^3.7.0",
+    "@supabase/supabase-js": "^2.52.1",
     "@tensorflow/tfjs-node": "^4.22.0",
     "axios": "^1.11.0",
     "bcryptjs": "^2.4.3",
@@ -24,6 +25,7 @@
     "helmet": "^7.1.0",
     "jsonwebtoken": "^9.0.2",
     "moment": "^2.29.4",
+    "multer": "^2.0.2",
     "nodemailer": "^6.9.7",
     "sqlite3": "^5.1.6",
     "winston": "^3.11.0"

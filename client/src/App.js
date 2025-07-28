@@ -30,6 +30,7 @@ import {
   PeopleAlt as PeopleIcon,
   Person as PersonIcon,
   Chat as ChatIcon,
+  Folder as FolderIcon,
   Inventory as InventoryIcon,
   Event as EventIcon,
   Assignment as AssignmentIcon,
