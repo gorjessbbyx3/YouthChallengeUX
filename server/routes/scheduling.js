@@ -225,3 +225,223 @@ function calculateOverallConfidence(schedule) {
 }
 
 module.exports = router;
+const express = require('express');
+const router = express.Router();
+const { supabase } = require('../database/supabase');
+
+// Get all staff schedules
+router.get('/', async (req, res) => {
+  try {
+    const { date, staff_id } = req.query;
+    
+    let query = supabase
+      .from('staff_schedules')
+      .select(`
+        *,
+        staff (id, first_name, last_name, role)
+      `)
+      .order('date', { ascending: true })
+      .order('start_time', { ascending: true });
+
+    if (date) {
+      query = query.eq('date', date);
+    }
+    
+    if (staff_id) {
+      query = query.eq('staff_id', staff_id);
+    }
+
+    const { data, error } = await query;
+
+    if (error) {
+      console.error('Error fetching schedules:', error);
+      return res.status(500).json({ error: 'Failed to fetch schedules' });
+    }
+
+    res.json(data);
+  } catch (error) {
+    console.error('Error in GET /schedules:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Create new schedule/task
+router.post('/', async (req, res) => {
+  try {
+    const {
+      staff_id,
+      task_name,
+      description,
+      date,
+      start_time,
+      end_time,
+      location,
+      required_staff = 1
+    } = req.body;
+
+    // Validate required fields
+    if (!task_name || !date || !start_time || !end_time) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    const { data, error } = await supabase
+      .from('staff_schedules')
+      .insert({
+        staff_id,
+        task_name,
+        description,
+        date,
+        start_time,
+        end_time,
+        location,
+        required_staff,
+        status: 'scheduled'
+      })
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error creating schedule:', error);
+      return res.status(500).json({ error: 'Failed to create schedule' });
+    }
+
+    res.status(201).json(data);
+  } catch (error) {
+    console.error('Error in POST /schedules:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Update schedule
+router.put('/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const updates = req.body;
+
+    const { data, error } = await supabase
+      .from('staff_schedules')
+      .update(updates)
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error updating schedule:', error);
+      return res.status(500).json({ error: 'Failed to update schedule' });
+    }
+
+    res.json(data);
+  } catch (error) {
+    console.error('Error in PUT /schedules:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Delete schedule
+router.delete('/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const { error } = await supabase
+      .from('staff_schedules')
+      .delete()
+      .eq('id', id);
+
+    if (error) {
+      console.error('Error deleting schedule:', error);
+      return res.status(500).json({ error: 'Failed to delete schedule' });
+    }
+
+    res.json({ message: 'Schedule deleted successfully' });
+  } catch (error) {
+    console.error('Error in DELETE /schedules:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Assign staff to task
+router.post('/:id/assign', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { staff_ids } = req.body;
+
+    if (!Array.isArray(staff_ids)) {
+      return res.status(400).json({ error: 'staff_ids must be an array' });
+    }
+
+    const { data, error } = await supabase
+      .from('staff_schedules')
+      .update({ 
+        assigned_staff: staff_ids,
+        status: staff_ids.length > 0 ? 'assigned' : 'scheduled'
+      })
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error assigning staff:', error);
+      return res.status(500).json({ error: 'Failed to assign staff' });
+    }
+
+    res.json(data);
+  } catch (error) {
+    console.error('Error in POST /schedules/:id/assign:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Get available staff for a time slot
+router.get('/available-staff', async (req, res) => {
+  try {
+    const { date, start_time, end_time } = req.query;
+
+    if (!date || !start_time || !end_time) {
+      return res.status(400).json({ error: 'Missing required parameters' });
+    }
+
+    // Get all staff
+    const { data: allStaff, error: staffError } = await supabase
+      .from('staff')
+      .select('id, first_name, last_name, role');
+
+    if (staffError) {
+      console.error('Error fetching staff:', staffError);
+      return res.status(500).json({ error: 'Failed to fetch staff' });
+    }
+
+    // Get conflicting schedules
+    const { data: conflicts, error: conflictError } = await supabase
+      .from('staff_schedules')
+      .select('assigned_staff')
+      .eq('date', date)
+      .or(`and(start_time.lte.${end_time},end_time.gte.${start_time})`);
+
+    if (conflictError) {
+      console.error('Error checking conflicts:', conflictError);
+      return res.status(500).json({ error: 'Failed to check conflicts' });
+    }
+
+    // Extract conflicting staff IDs
+    const conflictingStaffIds = new Set();
+    conflicts.forEach(schedule => {
+      if (schedule.assigned_staff) {
+        schedule.assigned_staff.forEach(staffId => {
+          conflictingStaffIds.add(staffId);
+        });
+      }
+    });
+
+    // Filter available staff
+    const availableStaff = allStaff.filter(staff => 
+      !conflictingStaffIds.has(staff.id)
+    );
+
+    res.json(availableStaff);
+  } catch (error) {
+    console.error('Error in GET /schedules/available-staff:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+module.exports = router;

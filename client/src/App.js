@@ -3,18 +3,11 @@ import { Admin, Resource, ListGuesser, EditGuesser, ShowGuesser } from 'react-ad
 import dataProvider from './dataProvider';
 import { Dashboard } from './components/Dashboard';
 import { Layout } from './Layout';
-import { CadetList } from './components/CadetList';
-import { CadetEdit } from './components/CadetEdit';
-import { CadetCreate } from './components/CadetCreate';
-import { CadetShow } from './components/CadetShow';
 import { StaffList } from './components/StaffList';
 import { StaffEdit } from './components/StaffEdit';
 import { StaffCreate } from './components/StaffCreate';
 import { MentorshipList } from './components/MentorshipList';
 import { MentorshipCreate } from './components/MentorshipCreate';
-import { InventoryList } from './components/InventoryList';
-import { InventoryEdit } from './components/InventoryEdit';
-import { InventoryCreate } from './components/InventoryCreate';
 import { EventList, EventEdit, EventCreate } from './components/Events';
 import { Reports } from './components/Reports';
 import { AssignmentList, AssignmentEdit, AssignmentCreate, AssignmentShow } from './components/Assignments';
@@ -26,6 +19,8 @@ import { AcademicTracking } from './components/AcademicTracking';
 import { Communications } from './components/Communications';
 import { DocumentManagement } from './components/DocumentManagement';
 import { authProvider } from './authProvider';
+import { InventoryList, InventoryEdit, InventoryCreate, InventoryKanban } from './components/Inventory';
+import { CadetList, CadetEdit, CadetCreate, CadetShow, CadetDashboard } from './components/CadetsManagement';
 
 // Icons
 import {
@@ -38,6 +33,7 @@ import {
   Assignment as AssignmentIcon,
   Analytics as AnalyticsIcon
 } from '@mui/icons-material';
+import GroupIcon from '@mui/icons-material/Group';
 
 
 
@@ -75,19 +71,10 @@ const App = () => (
     />
     <Resource 
       name="inventory" 
-      list={InventoryList} 
+      list={InventoryKanban} 
       edit={InventoryEdit} 
-      create={InventoryCreate}
+      create={InventoryCreate} 
       icon={InventoryIcon}
-      options={{ label: 'Inventory' }}
-    />
-    <Resource 
-      name="events" 
-      list={EventList} 
-      edit={EventEdit} 
-      create={EventCreate}
-      icon={EventIcon}
-      options={{ label: 'Events' }}
     />
         <Resource name="ai-assistant" list={AIAssistant} />
             <Resource

@@ -31,6 +31,7 @@ app.use('/api/cadets', require('./routes/cadets'));
 app.use('/api/staff', require('./routes/staff'));
 app.use('/api/mentorship', require('./routes/mentorship'));
 app.use('/api/inventory', require('./routes/inventory'));
+app.use('/api/cadets', require('./routes/cadets'));
 app.use('/api/events', require('./routes/events'));
 app.use('/api/assignments', require('./routes/assignments'));
 app.use('/api/reports', require('./routes/reports'));
