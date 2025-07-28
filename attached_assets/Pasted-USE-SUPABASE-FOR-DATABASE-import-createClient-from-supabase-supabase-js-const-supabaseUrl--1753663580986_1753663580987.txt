@@ -23,4 +23,4 @@ const suggestSchedule = (staff: Staff[], tasks: Task[]) => {
     task,
     assigned: staff.filter(s => s.availability.includes(task.time)).slice(0, task.requiredStaff)
   }));
-};
+}
