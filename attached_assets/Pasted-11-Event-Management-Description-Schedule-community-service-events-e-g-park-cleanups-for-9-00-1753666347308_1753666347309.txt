@@ -1,0 +1,64 @@
+11. Event Management
+•  Description: Schedule community service events (e.g., park cleanups for 9,000+ hours) and recruitment drives, ensuring staff and cadet availability. Includes a calendar view and automated reminders for participants.
+•  Purpose: Coordinate program activities to maintain engagement and meet service hour goals.
+•  Technical Implementation: Use React-admin’s Calendar for the interface, SQLite for an Event model (fields: id, date, type, staffIds, cadetIds), and a Node.js/Express API for scheduling. Reminders are sent via Nodemailer.
+•  Workflow Impact: Saves 1 hour per week by automating event planning and reminders.
+•  YCA Alignment: Supports 9,000+ community service hours and recruitment for new cadet cycles.
+•  Psychology/Astrology Integration: Aligns with self-determination theory (purpose), as meaningful events foster cadet motivation and community connection.
+•  Additional Details:
+	•  User Interaction: Staff add events (e.g., “Park Cleanup, July 28, 2025”), assign staff/cadets, and receive reminders.
+	•  Data Flow: Event data is stored in SQLite, accessed via API, and displayed in the calendar.
+	•  Scalability: Handles multiple events weekly, extensible for larger programs.
+	•  Error Handling: Ensures events align with staff availability.
+
+12. Reporting Dashboard
+•  Description: Generate real-time statistics for funders (e.g., Department of Defense), including mentorship hours, HiSET completion rates (78%), service hours (9,000+), and placement outcomes (48% workforce). Includes exportable reports and visualizations like bar or line charts.
+•  Purpose: Meet funder reporting requirements efficiently, freeing staff for cadet-focused tasks.
+•  Technical Implementation: Use React-admin’s Dashboard for the interface, SQLite queries for stats aggregation, and Chart.js for visualizations. A Node.js/Express API serves analytics data.
+•  Workflow Impact: Saves 2–3 hours per week by automating report generation and visualization.
+•  YCA Alignment: Tracks key metrics (HiSET, service hours, placements) for DoD compliance and program evaluation.
+•  Psychology/Astrology Integration: Supports accountability, indirectly enhancing cadet trust in a structured program.
+•  Additional Details:
+	•  User Interaction: Staff view a dashboard with stats (e.g., “Q3 2025: 500 mentorship hours, 78% HiSET”). Reports can be exported as CSV or PDF.
+	•  Data Flow: Data is aggregated from SQLite tables (logs, cadets) via API and visualized in the frontend.
+	•  Scalability: Handles current data volume, extensible for additional metrics.
+	•  Error Handling: Validates data integrity before reporting.
+
+13. Automated Summaries (AI)
+•  Description: Generate draft reports for funders using AI, summarizing mentorship hours, inventory usage, and cadet outcomes (e.g., HiSET, placements). Staff can edit drafts before submission.
+•  Purpose: Reduce reporting time by automating draft creation, ensuring clarity and accuracy.
+•  Technical Implementation: Use Hugging Face’s GPT-2 for text generation, with inputs like stats and outputs as summary text. Store drafts in SQLite and integrate into the React-admin reporting interface.
+•  Workflow Impact: Saves 2 hours per week by providing editable report drafts.
+•  YCA Alignment: Streamlines DoD reporting, ensuring compliance with metrics like 9,000+ service hours.
+•  Psychology/Astrology Integration: Enhances staff efficiency, allowing more focus on cadet support, indirectly supporting psychological stability.
+•  Additional Details:
+	•  User Interaction: Staff click “Generate Report” on the dashboard, review AI-generated drafts, and edit before exporting.
+	•  Data Flow: Stats are fetched from SQLite, processed by GPT-2, and displayed via API in the frontend.
+	•  Scalability: Handles large datasets, with cloud-based GPT-2 for efficiency.
+	•  Error Handling: Ensures drafts align with raw data to avoid inaccuracies.
+
+14. Mobile Optimization
+•  Description: Provide a responsive interface for staff and mentors to access the CRM on mobile devices, enabling on-the-go updates for schedules, mentor logs, and inventory. Supports offline data entry with syncing when connectivity is restored.
+•  Purpose: Allow staff to manage tasks during field activities (e.g., service events), improving flexibility in a low-staff environment.
+•  Technical Implementation: Use Tailwind CSS for responsive design, Workbox for offline caching, and React-admin for a mobile-friendly interface. Store offline data in SQLite.
+•  Workflow Impact: Saves 0.5 hour per day by enabling mobile access, reducing reliance on desktop systems.
+•  YCA Alignment: Supports staff mobility during events, ensuring continuity for ~100–200 cadets.
+•  Psychology/Astrology Integration: Enhances staff usability, reducing stress and allowing more focus on cadet engagement.
+•  Additional Details:
+	•  User Interaction: Staff access the CRM on phones to update schedules or logs (e.g., during a park cleanup). Offline changes sync when online.
+	•  Data Flow: Offline data is cached in SQLite, synced to the server via API when connected.
+	•  Scalability: Supports multiple users, with Workbox handling variable connectivity.
+	•  Error Handling: Ensures offline data integrity during sync.
+
+15. Compliance Tracking
+•  Description: Track adherence to Department of Defense (DoD), health, and safety regulations (e.g., cadet supervision ratios, facility standards). Logs compliance checks and flags non-compliance issues on a dedicated dashboard.
+•  Purpose: Ensure program compliance to maintain funding and provide a safe environment for cadets.
+•  Technical Implementation: Use SQLite for a ComplianceLog model with fields like id, checkType, date, and status, React-admin for a compliance dashboard, and a Node.js/Express API for logging. Alerts for non-compliance are sent via email or dashboard notifications.
+•  Workflow Impact: Saves 1 hour per week by automating compliance checks and reporting.
+•  YCA Alignment: Meets DoD funding requirements, ensuring program sustainability.
+•  Psychology/Astrology Integration: Ensures a safe, structured environment, supporting cadet trust and stability.
+•  Additional Details:
+	•  User Interaction: Staff log compliance checks (e.g., “Supervision ratio met, July 27, 2025”). Dashboard flags issues (e.g., “Ratio non-compliant”).
+	•  Data Flow: Logs are stored in SQLite, accessed via API, and displayed in the frontend.
+	•  Scalability: Handles current regulations, extensible for new requirements.
+	•  Error Handling: Validates compliance data to ensure accuracy.
