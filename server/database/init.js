@@ -324,6 +324,52 @@ const initialize = () => {
     )
   `);
 
+   // Create mentorship table
+    db.run(`
+      CREATE TABLE IF NOT EXISTS mentorship (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        mentor_id INTEGER NOT NULL,
+        mentee_id INTEGER NOT NULL,
+        start_date DATE NOT NULL,
+        status TEXT DEFAULT 'active',
+        notes TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (mentor_id) REFERENCES staff(id),
+        FOREIGN KEY (mentee_id) REFERENCES cadets(id)
+      )
+    `);
+
+    // Create room assignments table
+    db.run(`
+      CREATE TABLE IF NOT EXISTS room_assignments (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        cadet_id INTEGER NOT NULL,
+        room_number INTEGER NOT NULL,
+        bed_number INTEGER NOT NULL,
+        assigned_date DATETIME DEFAULT CURRENT_TIMESTAMP,
+        status TEXT DEFAULT 'active',
+        FOREIGN KEY (cadet_id) REFERENCES cadets(id)
+      )
+    `);
+
+    // Create supervisor assignments table
+    db.run(`
+      CREATE TABLE IF NOT EXISTS supervisor_assignments (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        cadet_id INTEGER NOT NULL,
+        staff_id INTEGER NOT NULL,
+        assignment_type TEXT DEFAULT 'supervision',
+        compatibility_score REAL,
+        effectiveness_rating INTEGER CHECK(effectiveness_rating >= 1 AND effectiveness_rating <= 5),
+        assigned_date DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_date DATETIME,
+        status TEXT DEFAULT 'active',
+        notes TEXT,
+        FOREIGN KEY (cadet_id) REFERENCES cadets(id),
+        FOREIGN KEY (staff_id) REFERENCES staff(id)
+      )
+    `);
+
   console.log('Database initialized successfully');
 };
 

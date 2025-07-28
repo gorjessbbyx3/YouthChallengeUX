@@ -9,6 +9,8 @@ import {
   SimpleForm,
   TextInput,
   SelectInput,
+  DateInput,
+  NumberInput,
   Filter,
   SearchInput
 } from 'react-admin';
@@ -56,6 +58,8 @@ export const StaffEdit = (props) => (
       />
       <TextInput source="email" type="email" required />
       <TextInput source="phone" />
+      <DateInput source="birth_date" label="Birth Date (for astrology compatibility)" />
+      <NumberInput source="experience_years" label="Years of Experience" min={0} />
       <SelectInput 
         source="experience_level" 
         choices={[
@@ -85,6 +89,8 @@ export const StaffCreate = (props) => (
       />
       <TextInput source="email" type="email" required />
       <TextInput source="phone" />
+      <DateInput source="birth_date" label="Birth Date (for astrology compatibility)" />
+      <NumberInput source="experience_years" label="Years of Experience" min={0} defaultValue={1} />
       <SelectInput 
         source="experience_level" 
         choices={[

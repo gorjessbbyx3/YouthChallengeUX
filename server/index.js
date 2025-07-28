@@ -42,6 +42,8 @@ app.use('/api/behavioral-tracking', require('./routes/behavioral-tracking'));
 app.use('/api/academic-tracking', require('./routes/academic-tracking'));
 app.use('/api/communications', require('./routes/communications'));
 app.use('/api/documents', require('./routes/documents'));
+const roomAssignmentsRoutes = require('./routes/room-assignments');
+const supervisorAssignmentsRoutes = require('./routes/supervisor-assignments');
 
 // Serve static files in production
 if (process.env.NODE_ENV === 'production') {
@@ -54,11 +56,16 @@ if (process.env.NODE_ENV === 'production') {
 
 // Import utilities
 const { initializeReminderSchedule } = require('./utils/mentorshipReminders');
-const { initializeSchedulingReminders } = require('./utils/schedulingReminders');
 
-// Initialize reminder schedulers
+// Initialize reminder scheduler
 initializeReminderSchedule();
-initializeSchedulingReminders();
+
+app.use('/api/mentorship', require('./routes/mentorship'));
+app.use('/api/events', require('./routes/events'));
+app.use('/api/inventory', require('./routes/inventory'));
+app.use('/api/reports', require('./routes/reports'));
+app.use('/api/room-assignments', roomAssignmentsRoutes);
+app.use('/api/supervisor-assignments', supervisorAssignmentsRoutes);
 
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`YCA CRM Server running on port ${PORT}`);
