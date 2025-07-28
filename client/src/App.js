@@ -19,10 +19,12 @@ import { EventList, EventEdit, EventCreate } from './components/Events';
 import { Reports } from './components/Reports';
 import { AssignmentList, AssignmentEdit, AssignmentCreate, AssignmentShow } from './components/Assignments';
 import { Scheduling } from './components/Scheduling';
+import { SchedulingAnalytics } from './components/SchedulingAnalytics';
 import { AIAssistant } from './components/AIAssistant';
 import { BehavioralTracking } from './components/BehavioralTracking';
 import { AcademicTracking } from './components/AcademicTracking';
 import { Communications } from './components/Communications';
+import { DocumentManagement } from './components/DocumentManagement';
 import { authProvider } from './authProvider';
 
 // Icons
@@ -118,6 +120,12 @@ const App = () => (
           list={Communications} 
           icon={ChatIcon}
           options={{ label: 'Family Communications' }} 
+        />
+        <Resource 
+          name="documents" 
+          list={DocumentManagement} 
+          icon={FolderIcon}
+          options={{ label: 'Document Management' }} 
         />
       </Admin>
 );

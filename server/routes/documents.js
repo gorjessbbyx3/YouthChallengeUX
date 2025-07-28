@@ -204,7 +204,18 @@ router.get('/download/:documentId', authenticateToken, async (req, res) => {
     // Log download activity
     await logDocumentActivity(documentId, 'download', req.user.id);
 
-    res.download(filePath, document.original_name);
+    // Set proper headers for file download
+    res.setHeader('Content-Disposition', `attachment; filename="${document.original_name}"`);
+    res.setHeader('Content-Type', document.mime_type || 'application/octet-stream');
+    
+    res.download(filePath, document.original_name, (err) => {
+      if (err) {
+        console.error('Download error:', err);
+        if (!res.headersSent) {
+          res.status(500).json({ error: 'Download failed' });
+        }
+      }
+    });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

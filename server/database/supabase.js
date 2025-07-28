@@ -14,13 +14,22 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 // Initialize Supabase tables
 const initializeTables = async () => {
   try {
-    // Check if tables exist, if not create them via SQL
     console.log('Supabase client initialized successfully');
     
-    // Test connection
-    const { data, error } = await supabase.from('staff').select('count', { count: 'exact', head: true });
-    if (error && error.code === '42P01') {
-      console.log('Tables need to be created in Supabase dashboard');
+    // Test connection with multiple tables
+    const tables = ['staff', 'cadets', 'documents', 'document_folders'];
+    
+    for (const table of tables) {
+      try {
+        const { data, error } = await supabase.from(table).select('count', { count: 'exact', head: true });
+        if (error && error.code === '42P01') {
+          console.log(`Table '${table}' needs to be created in Supabase dashboard`);
+        } else {
+          console.log(`Table '${table}' is accessible`);
+        }
+      } catch (err) {
+        console.log(`Error checking table '${table}':`, err.message);
+      }
     }
     
     return supabase;

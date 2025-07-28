@@ -35,7 +35,7 @@ import {
   ListItem,
   ListItemText,
   ListItemIcon,
-  ListItemSecondary
+  ListItemSecondaryAction
 } from '@mui/material';
 import {
   CloudUpload as UploadIcon,
