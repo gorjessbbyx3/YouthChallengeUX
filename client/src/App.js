@@ -107,6 +107,7 @@ const App = () => (
         icon={AssignmentIcon}
         options={{ label: 'Scheduling' }}
     />
+            <Resource name="scheduling-analytics" list={SchedulingAnalytics} options={{ label: 'Schedule Analytics' }} />
       </Admin>
 );
 

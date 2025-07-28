@@ -69,6 +69,8 @@ const initialize = () => {
   db.run(`
     CREATE TABLE IF NOT EXISTS staff (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
+      first_name TEXT NOT NULL,
+      last_name TEXT NOT NULL,
       name TEXT NOT NULL,
       email TEXT UNIQUE NOT NULL,
       password TEXT NOT NULL,
@@ -78,6 +80,10 @@ const initialize = () => {
       birth_location TEXT,
       experience_years INTEGER DEFAULT 0,
       availability TEXT DEFAULT '[]',
+      status TEXT DEFAULT 'active',
+      specializations TEXT DEFAULT '[]',
+      performance_rating REAL DEFAULT 0.5,
+      preferred_tasks TEXT DEFAULT '[]',
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )
   `);

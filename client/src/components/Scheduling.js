@@ -87,11 +87,49 @@ export const Scheduling = () => {
   const optimizeSchedule = async () => {
     setOptimizing(true);
     try {
+      // Get cadet risk information for smart scheduling
+      const cadetsResponse = await axios.get('/api/cadets');
+      const cadets = cadetsResponse.data;
+      const highRiskCount = cadets.filter(c => c.behavior_score <= 2).length;
+      
       const tasks = [
-        { name: 'Morning Drill', time: '06:00', required_staff: 2, requires_experience: true },
-        { name: 'HiSET Classes', time: '09:00', required_staff: 3, requires_experience: false },
-        { name: 'Community Service', time: '14:00', required_staff: 2, requires_experience: false },
-        { name: 'Evening Supervision', time: '18:00', required_staff: 1, requires_experience: true }
+        { 
+          name: 'Morning Drill', 
+          time: '06:00', 
+          required_staff: 2, 
+          requires_experience: true,
+          high_risk_cadets: highRiskCount > 0,
+          priority: 'high'
+        },
+        { 
+          name: 'HiSET Classes', 
+          time: '09:00', 
+          required_staff: Math.max(2, Math.ceil(cadets.length / 15)), 
+          requires_experience: false,
+          priority: 'high'
+        },
+        { 
+          name: 'Community Service', 
+          time: '14:00', 
+          required_staff: 2, 
+          requires_experience: false,
+          priority: 'medium'
+        },
+        { 
+          name: 'Evening Supervision', 
+          time: '18:00', 
+          required_staff: Math.max(1, Math.ceil(highRiskCount / 5)), 
+          requires_experience: true,
+          high_risk_cadets: true,
+          priority: 'high'
+        },
+        { 
+          name: 'Mentorship Sessions', 
+          time: '15:30', 
+          required_staff: Math.min(3, Math.ceil(cadets.length / 20)), 
+          requires_experience: true,
+          priority: 'medium'
+        }
       ];
       
       const response = await axios.post('/api/scheduling/optimize', {
@@ -102,6 +140,10 @@ export const Scheduling = () => {
       setOptimizedResult(response.data);
     } catch (error) {
       console.error('Error optimizing schedule:', error);
+      setOptimizedResult({
+        error: 'AI optimization failed. Please try manual scheduling.',
+        recommendations: ['Check staff availability', 'Ensure adequate experienced staff coverage']
+      });
     } finally {
       setOptimizing(false);
     }
@@ -139,10 +181,48 @@ export const Scheduling = () => {
       </Box>
 
       {optimizedResult && (
-        <Alert severity="info" sx={{ mb: 3 }}>
-          <Typography variant="h6">AI Schedule Optimization Results</Typography>
+        <Alert severity={optimizedResult.error ? "warning" : "success"} sx={{ mb: 3 }}>
+          <Typography variant="h6">
+            {optimizedResult.error ? "⚠️ Scheduling Issue" : "🤖 AI Schedule Optimization Results"}
+          </Typography>
+          
+          {optimizedResult.ai_metadata && (
+            <Box sx={{ mt: 1, mb: 2 }}>
+              <Typography variant="body2" color="text.secondary">
+                📊 Analysis: {optimizedResult.ai_metadata.total_staff_analyzed} staff • 
+                {optimizedResult.ai_metadata.high_risk_cadets} high-risk cadets • 
+                {optimizedResult.ai_metadata.optimization_confidence}% confidence
+              </Typography>
+            </Box>
+          )}
+
+          {optimizedResult.optimized_schedule && (
+            <Box sx={{ mt: 2, mb: 2 }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>Suggested Assignments:</Typography>
+              {optimizedResult.optimized_schedule.map((assignment, index) => (
+                <Box key={index} sx={{ ml: 2, mt: 1 }}>
+                  <Typography variant="body2" sx={{ fontWeight: 'medium' }}>
+                    {assignment.task} ({assignment.time})
+                  </Typography>
+                  {assignment.assigned_staff.map((staff, staffIndex) => (
+                    <Typography key={staffIndex} variant="body2" sx={{ ml: 2, color: 'text.secondary' }}>
+                      → {staff.name} ({staff.experience_years}yr exp, 
+                      {staff.ai_score ? ` ${(staff.ai_score * 100).toFixed(0)}% match` : ''})
+                    </Typography>
+                  ))}
+                  {assignment.assignment_rationale && assignment.assignment_rationale.length > 0 && (
+                    <Typography variant="caption" sx={{ ml: 2, fontStyle: 'italic', color: 'primary.main' }}>
+                      💡 {assignment.assignment_rationale[0]}
+                    </Typography>
+                  )}
+                </Box>
+              ))}
+            </Box>
+          )}
+
+          <Typography variant="subtitle2" sx={{ fontWeight: 'bold', mt: 2 }}>Recommendations:</Typography>
           {optimizedResult.recommendations.map((rec, index) => (
-            <Typography key={index} variant="body2">• {rec}</Typography>
+            <Typography key={index} variant="body2" sx={{ ml: 1 }}>• {rec}</Typography>
           ))}
         </Alert>
       )}
