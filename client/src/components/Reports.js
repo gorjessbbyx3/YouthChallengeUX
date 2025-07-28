@@ -10,344 +10,486 @@ import {
   MenuItem,
   FormControl,
   InputLabel,
-  Alert,
   CircularProgress,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Paper
+  Alert,
+  Chip,
+  Paper,
+  Tabs,
+  Tab,
+  List,
+  ListItem,
+  ListItemText,
+  ListItemIcon,
+  LinearProgress
 } from '@mui/material';
 import {
+  BarChart,
   Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  LineChart,
   Line,
-  Pie
-} from 'react-chartjs-2';
-import { saveAs } from 'file-saver';
-import axios from 'axios';
+  PieChart,
+  Pie,
+  Cell,
+  ResponsiveContainer,
+  AreaChart,
+  Area
+} from 'recharts';
+import {
+  Download as DownloadIcon,
+  Assessment as AssessmentIcon,
+  TrendingUp as TrendingUpIcon,
+  CheckCircle as CheckCircleIcon,
+  Warning as WarningIcon,
+  School as SchoolIcon,
+  Work as WorkIcon,
+  VolunteerActivism as ServiceIcon,
+  Psychology as MentorshipIcon
+} from '@mui/icons-material';
 
-export const Reports = () => {
-  const [reportType, setReportType] = useState('behavioral');
-  const [reportData, setReportData] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
+const Reports = () => {
+  const [dashboardMetrics, setDashboardMetrics] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [tabValue, setTabValue] = useState(0);
+  const [exportFormat, setExportFormat] = useState('json');
+  const [reportType, setReportType] = useState('dod');
 
   useEffect(() => {
-    generateReport();
-  }, [reportType]);
+    fetchDashboardMetrics();
+    // Auto-refresh every 5 minutes
+    const interval = setInterval(fetchDashboardMetrics, 5 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, []);
 
-  const generateReport = async () => {
-    setLoading(true);
-    setError(null);
-
+  const fetchDashboardMetrics = async () => {
     try {
-      const token = localStorage.getItem('auth');
-      const headers = { Authorization: `Bearer ${token}` };
-
-      const response = await axios.get(`/api/reports/${reportType}`, { headers });
-      setReportData(response.data);
-    } catch (err) {
-      setError('Failed to generate report');
-      console.error('Report generation error:', err);
+      setLoading(true);
+      const response = await fetch('/api/reports/dashboard-metrics', {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+      const result = await response.json();
+      setDashboardMetrics(result);
+    } catch (error) {
+      console.error('Error fetching dashboard metrics:', error);
     } finally {
       setLoading(false);
     }
   };
 
-  const exportReport = async (format = 'csv') => {
+  const handleExport = async () => {
     try {
-      const token = localStorage.getItem('auth');
-      const response = await axios.get(`/api/reports/${reportType}/export?format=${format}`, {
-        headers: { Authorization: `Bearer ${token}` },
-        responseType: 'blob'
+      const currentQuarter = Math.ceil((new Date().getMonth() + 1) / 3);
+      const currentYear = new Date().getFullYear();
+
+      const response = await fetch(`/api/reports/export/${reportType}?format=${exportFormat}&quarter=${currentQuarter}&year=${currentYear}`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
       });
 
-      const blob = new Blob([response.data], { type: response.headers['content-type'] });
-      saveAs(blob, `${reportType}_report.${format}`);
-    } catch (err) {
-      setError('Failed to export report');
+      if (exportFormat === 'csv') {
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.style.display = 'none';
+        a.href = url;
+        a.download = `${reportType}-report-${new Date().toISOString().slice(0, 10)}.csv`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+      } else {
+        const result = await response.json();
+        const dataStr = JSON.stringify(result, null, 2);
+        const dataBlob = new Blob([dataStr], { type: 'application/json' });
+        const url = window.URL.createObjectURL(dataBlob);
+        const a = document.createElement('a');
+        a.style.display = 'none';
+        a.href = url;
+        a.download = `${reportType}-report-${new Date().toISOString().slice(0, 10)}.json`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+      }
+    } catch (error) {
+      console.error('Error exporting report:', error);
     }
   };
 
-  const renderBehavioralReport = () => {
-    if (!reportData) return null;
-
-    const behaviorData = {
-      labels: ['Score 1', 'Score 2', 'Score 3', 'Score 4', 'Score 5'],
-      datasets: [{
-        label: 'Number of Cadets',
-        data: reportData.behaviorDistribution,
-        backgroundColor: ['#ff6b6b', '#ffa726', '#ffee58', '#66bb6a', '#4caf50']
-      }]
-    };
-
-    return (
-      <Grid container spacing={3}>
-        <Grid item xs={12} md={6}>
-          <Card>
-            <CardContent>
-              <Typography variant="h6" gutterBottom>
-                Behavior Score Distribution
-              </Typography>
-              <Bar data={behaviorData} options={{ responsive: true }} />
-            </CardContent>
-          </Card>
-        </Grid>
-        <Grid item xs={12} md={6}>
-          <Card>
-            <CardContent>
-              <Typography variant="h6" gutterBottom>
-                High-Risk Cadets ({reportData.highRiskCount})
-              </Typography>
-              <TableContainer>
-                <Table size="small">
-                  <TableHead>
-                    <TableRow>
-                      <TableCell>Name</TableCell>
-                      <TableCell>Score</TableCell>
-                      <TableCell>Risk Level</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {reportData.highRiskCadets?.map((cadet) => (
-                      <TableRow key={cadet.id}>
-                        <TableCell>{cadet.name}</TableCell>
-                        <TableCell>{cadet.behavior_score}</TableCell>
-                        <TableCell>{cadet.risk_level}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-            </CardContent>
-          </Card>
-        </Grid>
-      </Grid>
-    );
-  };
-
-  const renderAcademicReport = () => {
-    if (!reportData) return null;
-
-    const hisetData = {
-      labels: ['Not Started', 'In Progress', 'Completed'],
-      datasets: [{
-        data: reportData.hisetDistribution,
-        backgroundColor: ['#ff9800', '#2196f3', '#4caf50']
-      }]
-    };
-
-    return (
-      <Grid container spacing={3}>
-        <Grid item xs={12} md={6}>
-          <Card>
-            <CardContent>
-              <Typography variant="h6" gutterBottom>
-                HiSET Status Distribution
-              </Typography>
-              <Pie data={hisetData} options={{ responsive: true }} />
-            </CardContent>
-          </Card>
-        </Grid>
-        <Grid item xs={12} md={6}>
-          <Card>
-            <CardContent>
-              <Typography variant="h6" gutterBottom>
-                Academic Performance Metrics
-              </Typography>
-              <Box sx={{ mt: 2 }}>
-                <Typography variant="body1">
-                  Completion Rate: {reportData.completionRate}%
-                </Typography>
-                <Typography variant="body1">
-                  Target: 78%
-                </Typography>
-                <Typography variant="body1" sx={{ mt: 1 }}>
-                  Average Time to Complete: {reportData.avgCompletionTime} days
-                </Typography>
-              </Box>
-            </CardContent>
-          </Card>
-        </Grid>
-      </Grid>
-    );
-  };
-
-  const renderPlacementReport = () => {
-    if (!reportData) return null;
-
-    const placementData = {
-      labels: ['Workforce', 'Education', 'Military', 'Seeking'],
-      datasets: [{
-        data: reportData.placementDistribution,
-        backgroundColor: ['#2196f3', '#4caf50', '#ff9800', '#9e9e9e']
-      }]
-    };
-
-    return (
-      <Grid container spacing={3}>
-        <Grid item xs={12} md={6}>
-          <Card>
-            <CardContent>
-              <Typography variant="h6" gutterBottom>
-                Placement Distribution
-              </Typography>
-              <Pie data={placementData} options={{ responsive: true }} />
-            </CardContent>
-          </Card>
-        </Grid>
-        <Grid item xs={12} md={6}>
-          <Card>
-            <CardContent>
-              <Typography variant="h6" gutterBottom>
-                Placement Success Metrics
-              </Typography>
-              <Box sx={{ mt: 2 }}>
-                <Typography variant="body1">
-                  Success Rate: {reportData.successRate}%
-                </Typography>
-                <Typography variant="body1">
-                  Target: 48%
-                </Typography>
-                <Typography variant="body1" sx={{ mt: 2 }}>
-                  Top Placement Sectors:
-                </Typography>
-                {reportData.topSectors?.map((sector, index) => (
-                  <Typography key={index} variant="body2" sx={{ ml: 2 }}>
-                    • {sector.name}: {sector.count} placements
-                  </Typography>
-                ))}
-              </Box>
-            </CardContent>
-          </Card>
-        </Grid>
-      </Grid>
-    );
-  };
-
-  const renderEventReport = () => {
-    if (!reportData) return null;
-
-    // Example data (replace with actual event data)
-    const eventData = {
-      labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
-      datasets: [{
-        label: 'Events Held',
-        data: [12, 19, 3, 5, 2, 3],
-        backgroundColor: 'rgba(54, 162, 235, 0.2)',
-        borderColor: 'rgba(54, 162, 235, 1)',
-        borderWidth: 1
-      }]
-    };
-
-    return (
-      <Grid container spacing={3}>
-        <Grid item xs={12} md={6}>
-          <Card>
-            <CardContent>
-              <Typography variant="h6" gutterBottom>
-                Events Over Time
-              </Typography>
-              <Line data={eventData} options={{ responsive: true }} />
-            </CardContent>
-          </Card>
-        </Grid>
-        <Grid item xs={12} md={6}>
-          <Card>
-            <CardContent>
-              <Typography variant="h6" gutterBottom>
-                Upcoming Events
-              </Typography>
-              {/* Replace with actual upcoming events data */}
-              <Typography variant="body1">No upcoming events scheduled.</Typography>
-            </CardContent>
-          </Card>
-        </Grid>
-      </Grid>
-    );
-  };
-
-  const renderContent = () => {
-    if (loading) {
-      return (
-        <Box display="flex" justifyContent="center" alignItems="center" height="400px">
-          <CircularProgress />
-        </Box>
-      );
-    }
-
-    switch (reportType) {
-      case 'behavioral':
-        return renderBehavioralReport();
-      case 'academic':
-        return renderAcademicReport();
-      case 'placement':
-        return renderPlacementReport();
-      case 'events':
-        return renderEventReport();
-      default:
-        return <Typography>Select a report type</Typography>;
+  const getStatusColor = (status) => {
+    switch (status) {
+      case 'on_track': return 'success';
+      case 'needs_attention': return 'error';
+      default: return 'default';
     }
   };
+
+  const formatNumber = (num) => {
+    return new Intl.NumberFormat().format(num);
+  };
+
+  if (loading) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 400 }}>
+        <CircularProgress />
+      </Box>
+    );
+  }
+
+  if (!dashboardMetrics) {
+    return (
+      <Box sx={{ p: 3 }}>
+        <Alert severity="error">Failed to load dashboard metrics</Alert>
+      </Box>
+    );
+  }
+
+  const { summary, targets, monthlyTrends } = dashboardMetrics;
 
   return (
-    <Box p={3}>
-      <Typography variant="h4" gutterBottom>
-        YCA Reports & Analytics
-      </Typography>
-
-      {error && (
-        <Alert severity="error" sx={{ mb: 2 }}>
-          {error}
-        </Alert>
-      )}
-
-      <Box sx={{ mb: 3, display: 'flex', gap: 2, alignItems: 'center' }}>
-        <FormControl sx={{ minWidth: 200 }}>
-          <InputLabel>Report Type</InputLabel>
-          <Select
-            value={reportType}
-            onChange={(e) => setReportType(e.target.value)}
-            label="Report Type"
+    <Box sx={{ p: 3 }}>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+        <Typography variant="h4">
+          <AssessmentIcon sx={{ mr: 2, verticalAlign: 'middle' }} />
+          DoD Reporting Dashboard
+        </Typography>
+        <Box sx={{ display: 'flex', gap: 2 }}>
+          <FormControl size="small">
+            <InputLabel>Report Type</InputLabel>
+            <Select
+              value={reportType}
+              onChange={(e) => setReportType(e.target.value)}
+            >
+              <MenuItem value="dod">DoD Quarterly</MenuItem>
+              <MenuItem value="quarterly">Program Review</MenuItem>
+              <MenuItem value="annual">Annual Summary</MenuItem>
+            </Select>
+          </FormControl>
+          <FormControl size="small">
+            <InputLabel>Format</InputLabel>
+            <Select
+              value={exportFormat}
+              onChange={(e) => setExportFormat(e.target.value)}
+            >
+              <MenuItem value="json">JSON</MenuItem>
+              <MenuItem value="csv">CSV</MenuItem>
+            </Select>
+          </FormControl>
+          <Button
+            variant="contained"
+            startIcon={<DownloadIcon />}
+            onClick={handleExport}
           >
-            <MenuItem value="behavioral">Behavioral Analysis</MenuItem>
-            <MenuItem value="academic">Academic Progress</MenuItem>
-            <MenuItem value="placement">Placement Outcomes</MenuItem>
-            <MenuItem value="attendance">Attendance Reports</MenuItem>
-            <MenuItem value="mentorship">Mentorship Effectiveness</MenuItem>
-            <MenuItem value="events">Event Reports</MenuItem>
-          </Select>
-        </FormControl>
-
-        <Button
-          variant="outlined"
-          onClick={generateReport}
-          disabled={loading}
-        >
-          Refresh Report
-        </Button>
-
-        <Button
-          variant="contained"
-          onClick={() => exportReport('csv')}
-          disabled={loading || !reportData}
-        >
-          Export CSV
-        </Button>
-
-        <Button
-          variant="contained"
-          color="secondary"
-          onClick={() => exportReport('pdf')}
-          disabled={loading || !reportData}
-        >
-          Export PDF
-        </Button>
+            Export Report
+          </Button>
+        </Box>
       </Box>
 
-      {renderContent()}
+      <Tabs value={tabValue} onChange={(e, newValue) => setTabValue(newValue)} sx={{ mb: 3 }}>
+        <Tab label="DoD Metrics" />
+        <Tab label="Trends & Analytics" />
+        <Tab label="Performance Breakdown" />
+      </Tabs>
+
+      {tabValue === 0 && (
+        <Grid container spacing={3}>
+          {/* Key Performance Indicators */}
+          <Grid item xs={12}>
+            <Typography variant="h6" gutterBottom>Department of Defense Key Metrics</Typography>
+          </Grid>
+
+          <Grid item xs={12} md={3}>
+            <Card>
+              <CardContent sx={{ textAlign: 'center' }}>
+                <SchoolIcon sx={{ fontSize: 40, color: 'primary.main', mb: 1 }} />
+                <Typography variant="h4">{summary.hisetRate.toFixed(1)}%</Typography>
+                <Typography color="textSecondary">HiSET Completion</Typography>
+                <Box sx={{ mt: 1 }}>
+                  <Chip 
+                    label={`Target: ${targets.hisetTarget}%`}
+                    color={getStatusColor(targets.hisetStatus)}
+                    size="small"
+                  />
+                </Box>
+                <LinearProgress 
+                  variant="determinate" 
+                  value={Math.min(100, (summary.hisetRate / targets.hisetTarget) * 100)}
+                  sx={{ mt: 1 }}
+                />
+              </CardContent>
+            </Card>
+          </Grid>
+
+          <Grid item xs={12} md={3}>
+            <Card>
+              <CardContent sx={{ textAlign: 'center' }}>
+                <WorkIcon sx={{ fontSize: 40, color: 'success.main', mb: 1 }} />
+                <Typography variant="h4">{summary.workforceRate.toFixed(1)}%</Typography>
+                <Typography color="textSecondary">Workforce Placement</Typography>
+                <Box sx={{ mt: 1 }}>
+                  <Chip 
+                    label={`Target: ${targets.workforceTarget}%`}
+                    color={getStatusColor(targets.workforceStatus)}
+                    size="small"
+                  />
+                </Box>
+                <LinearProgress 
+                  variant="determinate" 
+                  value={Math.min(100, (summary.workforceRate / targets.workforceTarget) * 100)}
+                  sx={{ mt: 1 }}
+                />
+              </CardContent>
+            </Card>
+          </Grid>
+
+          <Grid item xs={12} md={3}>
+            <Card>
+              <CardContent sx={{ textAlign: 'center' }}>
+                <ServiceIcon sx={{ fontSize: 40, color: 'info.main', mb: 1 }} />
+                <Typography variant="h4">{formatNumber(summary.serviceHours)}</Typography>
+                <Typography color="textSecondary">Service Hours</Typography>
+                <Box sx={{ mt: 1 }}>
+                  <Chip 
+                    label={`Target: ${formatNumber(targets.serviceHoursTarget)}`}
+                    color={getStatusColor(targets.serviceStatus)}
+                    size="small"
+                  />
+                </Box>
+                <LinearProgress 
+                  variant="determinate" 
+                  value={Math.min(100, (summary.serviceHours / targets.serviceHoursTarget) * 100)}
+                  sx={{ mt: 1 }}
+                />
+              </CardContent>
+            </Card>
+          </Grid>
+
+          <Grid item xs={12} md={3}>
+            <Card>
+              <CardContent sx={{ textAlign: 'center' }}>
+                <MentorshipIcon sx={{ fontSize: 40, color: 'warning.main', mb: 1 }} />
+                <Typography variant="h4">{Math.round(summary.mentorshipHours)}</Typography>
+                <Typography color="textSecondary">Mentorship Hours</Typography>
+                <Box sx={{ mt: 1 }}>
+                  <Chip 
+                    label="Monthly Target: 500"
+                    color={summary.mentorshipHours >= 500 ? 'success' : 'warning'}
+                    size="small"
+                  />
+                </Box>
+              </CardContent>
+            </Card>
+          </Grid>
+
+          {/* Program Overview Cards */}
+          <Grid item xs={12} md={4}>
+            <Card>
+              <CardContent>
+                <Typography variant="h6" gutterBottom>Program Enrollment</Typography>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                  <Typography>Total Cadets:</Typography>
+                  <Typography variant="h6">{summary.totalCadets}</Typography>
+                </Box>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                  <Typography>Active Cadets:</Typography>
+                  <Typography variant="h6" color="primary">{summary.activeCadets}</Typography>
+                </Box>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <Typography>Graduated:</Typography>
+                  <Typography variant="h6" color="success.main">{summary.graduatedCadets}</Typography>
+                </Box>
+                <LinearProgress 
+                  variant="determinate" 
+                  value={summary.graduationRate}
+                  sx={{ mt: 2 }}
+                />
+                <Typography variant="body2" sx={{ mt: 1 }}>
+                  Graduation Rate: {summary.graduationRate.toFixed(1)}%
+                </Typography>
+              </CardContent>
+            </Card>
+          </Grid>
+
+          <Grid item xs={12} md={4}>
+            <Card>
+              <CardContent>
+                <Typography variant="h6" gutterBottom>Academic Performance</Typography>
+                <Box sx={{ textAlign: 'center' }}>
+                  <Typography variant="h3" color="primary">
+                    {summary.avgGrade.toFixed(1)}
+                  </Typography>
+                  <Typography color="textSecondary">Average Grade</Typography>
+                  <Chip 
+                    label={summary.avgGrade >= 80 ? 'Excellent' : summary.avgGrade >= 70 ? 'Good' : 'Needs Improvement'}
+                    color={summary.avgGrade >= 80 ? 'success' : summary.avgGrade >= 70 ? 'primary' : 'error'}
+                    sx={{ mt: 1 }}
+                  />
+                </Box>
+              </CardContent>
+            </Card>
+          </Grid>
+
+          <Grid item xs={12} md={4}>
+            <Card>
+              <CardContent>
+                <Typography variant="h6" gutterBottom>Behavioral Progress</Typography>
+                <Box sx={{ textAlign: 'center' }}>
+                  <Typography variant="h3" color={summary.behaviorTrend <= 3 ? 'success.main' : summary.behaviorTrend <= 5 ? 'primary.main' : 'error.main'}>
+                    {summary.behaviorTrend.toFixed(1)}
+                  </Typography>
+                  <Typography color="textSecondary">Behavior Score</Typography>
+                  <Chip 
+                    label={summary.behaviorTrend <= 3 ? 'Excellent Progress' : summary.behaviorTrend <= 5 ? 'Stable' : 'Needs Support'}
+                    color={summary.behaviorTrend <= 3 ? 'success' : summary.behaviorTrend <= 5 ? 'primary' : 'error'}
+                    sx={{ mt: 1 }}
+                  />
+                </Box>
+              </CardContent>
+            </Card>
+          </Grid>
+        </Grid>
+      )}
+
+      {tabValue === 1 && (
+        <Grid container spacing={3}>
+          <Grid item xs={12}>
+            <Card>
+              <CardContent>
+                <Typography variant="h6" gutterBottom>Monthly Trends</Typography>
+                <ResponsiveContainer width="100%" height={400}>
+                  <AreaChart data={monthlyTrends}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="month" />
+                    <YAxis />
+                    <Tooltip />
+                    <Legend />
+                    <Area type="monotone" dataKey="serviceHours" stackId="1" stroke="#4CAF50" fill="#4CAF50" name="Service Hours" />
+                    <Area type="monotone" dataKey="mentorshipHours" stackId="1" stroke="#2196F3" fill="#2196F3" name="Mentorship Hours" />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+          </Grid>
+
+          <Grid item xs={12} md={6}>
+            <Card>
+              <CardContent>
+                <Typography variant="h6" gutterBottom>Cadet Enrollment Trends</Typography>
+                <ResponsiveContainer width="100%" height={300}>
+                  <LineChart data={monthlyTrends}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="month" />
+                    <YAxis />
+                    <Tooltip />
+                    <Legend />
+                    <Line type="monotone" dataKey="newCadets" stroke="#FF9800" name="New Enrollments" />
+                    <Line type="monotone" dataKey="graduations" stroke="#4CAF50" name="Graduations" />
+                  </LineChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+          </Grid>
+
+          <Grid item xs={12} md={6}>
+            <Card>
+              <CardContent>
+                <Typography variant="h6" gutterBottom>Resource Utilization</Typography>
+                <Box sx={{ mb: 2 }}>
+                  <Typography variant="body2">Inventory Value: ${formatNumber(summary.inventoryValue)}</Typography>
+                  <Typography variant="body2" color={summary.lowStockItems > 5 ? 'error' : 'success'}>
+                    Low Stock Items: {summary.lowStockItems}
+                  </Typography>
+                </Box>
+                <Alert severity={summary.lowStockItems > 5 ? 'warning' : 'success'}>
+                  {summary.lowStockItems > 5 
+                    ? 'Review inventory management - multiple items need restocking'
+                    : 'Inventory levels are well maintained'
+                  }
+                </Alert>
+              </CardContent>
+            </Card>
+          </Grid>
+        </Grid>
+      )}
+
+      {tabValue === 2 && (
+        <Grid container spacing={3}>
+          <Grid item xs={12} md={6}>
+            <Card>
+              <CardContent>
+                <Typography variant="h6" gutterBottom>
+                  <CheckCircleIcon sx={{ mr: 1, verticalAlign: 'middle' }} />
+                  Performance Status
+                </Typography>
+                <List>
+                  <ListItem>
+                    <ListItemIcon>
+                      {targets.hisetStatus === 'on_track' ? 
+                        <CheckCircleIcon color="success" /> : 
+                        <WarningIcon color="error" />
+                      }
+                    </ListItemIcon>
+                    <ListItemText 
+                      primary="HiSET Completion Rate"
+                      secondary={`${summary.hisetRate.toFixed(1)}% (Target: ${targets.hisetTarget}%)`}
+                    />
+                  </ListItem>
+                  <ListItem>
+                    <ListItemIcon>
+                      {targets.workforceStatus === 'on_track' ? 
+                        <CheckCircleIcon color="success" /> : 
+                        <WarningIcon color="error" />
+                      }
+                    </ListItemIcon>
+                    <ListItemText 
+                      primary="Workforce Placement"
+                      secondary={`${summary.workforceRate.toFixed(1)}% (Target: ${targets.workforceTarget}%)`}
+                    />
+                  </ListItem>
+                  <ListItem>
+                    <ListItemIcon>
+                      {targets.serviceStatus === 'on_track' ? 
+                        <CheckCircleIcon color="success" /> : 
+                        <WarningIcon color="error" />
+                      }
+                    </ListItemIcon>
+                    <ListItemText 
+                      primary="Community Service Hours"
+                      secondary={`${formatNumber(summary.serviceHours)} (Target: ${formatNumber(targets.serviceHoursTarget)})`}
+                    />
+                  </ListItem>
+                </List>
+              </CardContent>
+            </Card>
+          </Grid>
+
+          <Grid item xs={12} md={6}>
+            <Card>
+              <CardContent>
+                <Typography variant="h6" gutterBottom>Last Updated</Typography>
+                <Typography variant="body2" color="textSecondary">
+                  {new Date(dashboardMetrics.lastUpdated).toLocaleString()}
+                </Typography>
+                <Button 
+                  variant="outlined" 
+                  onClick={fetchDashboardMetrics}
+                  sx={{ mt: 2 }}
+                  startIcon={<TrendingUpIcon />}
+                >
+                  Refresh Data
+                </Button>
+              </CardContent>
+            </Card>
+          </Grid>
+        </Grid>
+      )}
     </Box>
   );
 };
+
+export default Reports;
