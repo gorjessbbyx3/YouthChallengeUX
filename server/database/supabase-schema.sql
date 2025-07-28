@@ -151,6 +151,12 @@ CREATE TABLE IF NOT EXISTS mentorship_logs (
     notes TEXT,
     goals_set JSONB DEFAULT '[]',
     progress_rating INTEGER CHECK (progress_rating >= 1 AND progress_rating <= 10),
+    sentiment_score DECIMAL(3,2), -- -1.00 to 1.00
+    sentiment_magnitude DECIMAL(3,2), -- 0.00 to 1.00
+    sentiment_confidence DECIMAL(3,2), -- 0.00 to 1.00
+    alert_resolved BOOLEAN DEFAULT false,
+    action_taken TEXT,
+    resolved_at TIMESTAMP WITH TIME ZONE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );

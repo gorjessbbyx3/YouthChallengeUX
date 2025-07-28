@@ -51,8 +51,15 @@ if (process.env.NODE_ENV === 'production') {
   });
 }
 
+// Import utilities
+const { initializeReminderSchedule } = require('./utils/mentorshipReminders');
+
+// Initialize reminder scheduler
+initializeReminderSchedule();
+
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`YCA CRM Server running on port ${PORT}`);
+  console.log('Mentorship reminder system active');
 });
 
 module.exports = app;

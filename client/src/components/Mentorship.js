@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import {
   Card,
@@ -47,6 +46,7 @@ import {
   Check as CheckIcon,
   Schedule as ScheduleIcon
 } from '@mui/icons-material';
+import WarningIcon from '@mui/icons-material/Warning';
 import { MentorshipCreate } from './MentorshipCreate';
 import { MentorshipList } from './MentorshipList';
 import axios from 'axios';
@@ -60,6 +60,7 @@ export const Mentorship = () => {
   const [selectedMentorship, setSelectedMentorship] = useState(null);
   const [progressDialog, setProgressDialog] = useState(false);
   const [loading, setLoading] = useState(true);
+    const [sentimentAlerts, setSentimentAlerts] = useState([]);
 
   useEffect(() => {
     fetchData();
@@ -72,7 +73,7 @@ export const Mentorship = () => {
         axios.get('/api/cadets'),
         axios.get('/api/staff')
       ]);
-      
+
       setMentorships(mentorshipsRes.data);
       setCadets(cadetsRes.data);
       setStaff(staffRes.data);
@@ -104,8 +105,9 @@ export const Mentorship = () => {
     const active = mentorships.filter(m => m.status === 'active').length;
     const completed = mentorships.filter(m => m.status === 'completed').length;
     const avgProgress = mentorships.reduce((sum, m) => sum + calculateProgress(m), 0) / mentorships.length || 0;
-    
-    return { active, completed, avgProgress };
+      const totalSessions = mentorships.reduce((sum, m) => sum + (m.sessionCount || 0), 0);
+
+    return { active, completed, avgProgress, totalSessions };
   };
 
   const stats = getMentorshipStats();
@@ -130,56 +132,102 @@ export const Mentorship = () => {
         </Button>
       </Box>
 
-      {/* Stats Overview */}
-      <Grid container spacing={3} sx={{ mb: 3 }}>
-        <Grid item xs={12} md={3}>
-          <Card>
-            <CardContent>
-              <Typography variant="h4" color="success.main">{stats.active}</Typography>
-              <Typography variant="body2" color="text.secondary">Active Mentorships</Typography>
-            </CardContent>
-          </Card>
-        </Grid>
-        <Grid item xs={12} md={3}>
-          <Card>
-            <CardContent>
-              <Typography variant="h4" color="primary.main">{stats.completed}</Typography>
-              <Typography variant="body2" color="text.secondary">Completed Programs</Typography>
-            </CardContent>
-          </Card>
-        </Grid>
-        <Grid item xs={12} md={3}>
-          <Card>
-            <CardContent>
-              <Typography variant="h4" color="info.main">{stats.avgProgress.toFixed(0)}%</Typography>
-              <Typography variant="body2" color="text.secondary">Average Progress</Typography>
-            </CardContent>
-          </Card>
-        </Grid>
-        <Grid item xs={12} md={3}>
-          <Card>
-            <CardContent>
-              <Typography variant="h4" color="warning.main">
-                {cadets.filter(c => !mentorships.some(m => m.cadet_id === c.id && m.status === 'active')).length}
+      {/* Sentiment Alerts */}
+      {sentimentAlerts.length > 0 && (
+        <Alert severity="warning" sx={{ mb: 3 }}>
+          <Typography variant="h6" sx={{ mb: 1 }}>
+            <WarningIcon sx={{ mr: 1 }} />
+            Urgent Mentorship Alerts ({sentimentAlerts.length})
+          </Typography>
+          {sentimentAlerts.slice(0, 3).map((alert, index) => {
+            const cadet = cadets.find(c => c.id === alert.cadet_id);
+            return (
+              <Typography key={index} variant="body2" sx={{ mb: 0.5 }}>
+                • {cadet?.first_name} {cadet?.last_name}: {alert.notes.substring(0, 100)}...
               </Typography>
-              <Typography variant="body2" color="text.secondary">Unmatched Cadets</Typography>
+            );
+          })}
+        </Alert>
+      )}
+
+      {/* Statistics Cards */}
+      <Grid container spacing={3} sx={{ mb: 3 }}>
+        <Grid item xs={12} md={2.4}>
+          <Card>
+            <CardContent>
+              <Typography variant="h6" color="primary">
+                {stats.active}
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                Active Mentorships
+              </Typography>
+            </CardContent>
+          </Card>
+        </Grid>
+        <Grid item xs={12} md={2.4}>
+          <Card>
+            <CardContent>
+              <Typography variant="h6" color="success.main">
+                {stats.completed}
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                Completed
+              </Typography>
+            </CardContent>
+          </Card>
+        </Grid>
+        <Grid item xs={12} md={2.4}>
+          <Card>
+            <CardContent>
+              <Typography variant="h6" color="info.main">
+                {stats.avgProgress.toFixed(1)}%
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                Average Progress
+              </Typography>
+            </CardContent>
+          </Card>
+        </Grid>
+        <Grid item xs={12} md={2.4}>
+          <Card>
+            <CardContent>
+              <Typography variant="h6" color="warning.main">
+                {stats.totalSessions}
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                Total Sessions
+              </Typography>
+            </CardContent>
+          </Card>
+        </Grid>
+        <Grid item xs={12} md={2.4}>
+          <Card>
+            <CardContent>
+              <Typography variant="h6" color="error.main">
+                {sentimentAlerts.length}
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                Priority Alerts
+              </Typography>
             </CardContent>
           </Card>
         </Grid>
       </Grid>
 
+      {/* Tabs */}
       <Tabs value={tabValue} onChange={(e, newValue) => setTabValue(newValue)} sx={{ mb: 3 }}>
         <Tab label="Active Mentorships" icon={<Badge badgeContent={stats.active} color="success"><MentorshipIcon /></Badge>} />
+        <Tab label="Session Logs" icon={<ChatIcon />} />
+        <Tab label="Calendar & Scheduling" icon={<CalendarIcon />} />
+        <Tab label="Sentiment Analysis" icon={<StarIcon />} />
         <Tab label="Progress Tracking" icon={<ProgressIcon />} />
-        <Tab label="Goal Management" icon={<GoalIcon />} />
-        <Tab label="Program Analytics" icon={<StarIcon />} />
       </Tabs>
 
       {tabValue === 0 && (
         <Card>
           <CardContent>
             <Typography variant="h6" sx={{ mb: 2 }}>Active Mentorship Relationships</Typography>
-            
+
             <TableContainer component={Paper} variant="outlined">
               <Table>
                 <TableHead>
@@ -200,7 +248,7 @@ export const Mentorship = () => {
                       const cadet = cadets.find(c => c.id === mentorship.cadet_id);
                       const mentor = staff.find(s => s.id === mentorship.mentor_id);
                       const progress = calculateProgress(mentorship);
-                      
+
                       return (
                         <TableRow key={mentorship.id}>
                           <TableCell>
@@ -272,13 +320,13 @@ export const Mentorship = () => {
             <Card>
               <CardContent>
                 <Typography variant="h6" sx={{ mb: 2 }}>Progress Overview</Typography>
-                
+
                 {mentorships
                   .filter(m => m.status === 'active')
                   .map((mentorship) => {
                     const cadet = cadets.find(c => c.id === mentorship.cadet_id);
                     const progress = calculateProgress(mentorship);
-                    
+
                     return (
                       <Box key={mentorship.id} sx={{ mb: 3, p: 2, border: 1, borderColor: 'divider', borderRadius: 1 }}>
                         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
@@ -287,13 +335,13 @@ export const Mentorship = () => {
                           </Typography>
                           <Chip label={`${progress.toFixed(0)}% Complete`} color="primary" />
                         </Box>
-                        
+
                         <LinearProgress 
                           variant="determinate" 
                           value={progress} 
                           sx={{ mb: 2, height: 8, borderRadius: 4 }}
                         />
-                        
+
                         {mentorship.goals && (
                           <Box>
                             <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
@@ -331,7 +379,7 @@ export const Mentorship = () => {
             <Card>
               <CardContent>
                 <Typography variant="h6" sx={{ mb: 2 }}>This Week's Activities</Typography>
-                
+
                 <List>
                   <ListItem>
                     <ListItemAvatar>
@@ -344,7 +392,7 @@ export const Mentorship = () => {
                       secondary="Scheduled for this week"
                     />
                   </ListItem>
-                  
+
                   <ListItem>
                     <ListItemAvatar>
                       <Avatar>
@@ -356,7 +404,7 @@ export const Mentorship = () => {
                       secondary="Due for completion"
                     />
                   </ListItem>
-                  
+
                   <ListItem>
                     <ListItemAvatar>
                       <Avatar>
@@ -375,11 +423,11 @@ export const Mentorship = () => {
             <Card sx={{ mt: 3 }}>
               <CardContent>
                 <Typography variant="h6" sx={{ mb: 2 }}>Program Impact</Typography>
-                
+
                 <Alert severity="success" sx={{ mb: 2 }}>
                   Mentorship participants show 23% higher graduation rates
                 </Alert>
-                
+
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
                   <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                     <Typography variant="body2">Academic Improvement</Typography>
@@ -423,7 +471,7 @@ export const Mentorship = () => {
               <Typography variant="h6" sx={{ mb: 2 }}>
                 Progress for {cadets.find(c => c.id === selectedMentorship.cadet_id)?.first_name}
               </Typography>
-              
+
               <TextField
                 fullWidth
                 multiline
@@ -432,7 +480,7 @@ export const Mentorship = () => {
                 placeholder="Enter progress updates, achievements, and observations..."
                 sx={{ mb: 3 }}
               />
-              
+
               <Box sx={{ display: 'flex', gap: 2 }}>
                 <Button variant="contained" color="primary">
                   Save Progress
