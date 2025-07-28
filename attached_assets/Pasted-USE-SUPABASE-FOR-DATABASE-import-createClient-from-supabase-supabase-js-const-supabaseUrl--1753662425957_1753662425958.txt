@@ -1,0 +1,26 @@
+USE SUPABASE FOR DATABASE 
+import { createClient } from '@supabase/supabase-js'
+
+const supabaseUrl = 'https://bseobobmpvttwxrjvymw.supabase.co'
+const supabaseKey = process.env.SUPABASE_KEY
+const supabase = createClient(supabaseUrl, supabaseKey)
+1. Staff Scheduling
+•  Description: Create and manage schedules for approximately 5–10 staff members across classes (e.g., HiSET preparation), physical training, cadet supervision, and community service events. The feature includes a weekly and monthly calendar view, task assignment functionality, and automated email or SMS reminders for staff.
+•  Purpose: Automate scheduling to reduce conflicts, ensure adequate coverage for program activities, and free up staff time for direct cadet interaction, addressing the challenge of low staffing.
+•  Technical Implementation: Use React-admin for a calendar-based UI, SQLite to store a Staff model (fields: id, name, role [e.g., instructor, counselor], availability [array of dates/times]), and a Node.js/Express API for CRUD operations (create, read, update, delete). Implement email reminders using Nodemailer or SMS via Twilio free tier. The API handles task assignments and calendar rendering.
+•  Workflow Impact: Saves 0.5–1 hour per day by replacing manual spreadsheet-based scheduling, reducing errors like double-booking or uncovered shifts.
+•  YCA Alignment: Ensures consistent coverage for approximately 100–200 cadets’ activities, such as HiSET classes, physical training, and 9,000+ annual community service hours, supporting program continuity.
+•  Psychology/Astrology Integration: Aligns with self-determination theory by providing structured routines that create a stable environment, reducing cadet stress and enhancing engagement.
+User Interaction: Staff access a calendar view on the CRM dashboard, add tasks (e.g., “Morning Drills, 8 AM, 2 staff needed”), select available staff, and receive automated reminders (e.g., email: “Drills tomorrow, 8 AM”). The UI supports drag-and-drop task assignment.
+	•  Data Flow: Staff availability and tasks are stored in SQLite. The API fetches tasks and staff data, and the React-admin frontend renders the calendar. Reminders are sent via scheduled cron jobs.
+	•  Scalability: Designed to handle ~10 staff now, extensible for future programs like Job Challenge. Can integrate with Google Calendar for external syncing.
+	•  Error Handling: Validates task assignments to prevent conflicts (e.g., assigning unavailable staff).
+    
+interface Staff { id: string; name: string; role: string; availability: Date[] }
+interface Task { id: string; time: Date; requiredStaff: number }
+const suggestSchedule = (staff: Staff[], tasks: Task[]) => {
+  return tasks.map(task => ({
+    task,
+    assigned: staff.filter(s => s.availability.includes(task.time)).slice(0, task.requiredStaff)
+  }));
+};
