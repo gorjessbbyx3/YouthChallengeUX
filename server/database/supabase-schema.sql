@@ -108,6 +108,57 @@ CREATE TABLE IF NOT EXISTS communications (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+-- Scheduling tables
+CREATE TABLE IF NOT EXISTS scheduling_tasks (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    title VARCHAR(255) NOT NULL,
+    description TEXT,
+    start_time TIMESTAMP WITH TIME ZONE NOT NULL,
+    end_time TIMESTAMP WITH TIME ZONE NOT NULL,
+    required_staff INTEGER NOT NULL DEFAULT 1,
+    priority VARCHAR(20) DEFAULT 'medium', -- 'low', 'medium', 'high', 'critical'
+    category VARCHAR(50) NOT NULL, -- 'hiset', 'physical', 'supervision', 'community', 'counseling', 'admin'
+    status VARCHAR(20) DEFAULT 'scheduled', -- 'scheduled', 'in_progress', 'completed', 'cancelled'
+    created_by UUID REFERENCES staff(id),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS staff_assignments (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    task_id UUID REFERENCES scheduling_tasks(id) ON DELETE CASCADE,
+    staff_id UUID REFERENCES staff(id) ON DELETE CASCADE,
+    confirmed BOOLEAN DEFAULT false,
+    confirmed_at TIMESTAMP WITH TIME ZONE,
+    notes TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE(task_id, staff_id)
+);
+
+-- Staff availability tracking
+CREATE TABLE IF NOT EXISTS staff_availability (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    staff_id UUID REFERENCES staff(id) ON DELETE CASCADE,
+    day_of_week INTEGER NOT NULL, -- 0 = Sunday, 1 = Monday, etc.
+    start_time TIME NOT NULL,
+    end_time TIME NOT NULL,
+    available BOOLEAN DEFAULT true,
+    notes TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Scheduling notifications log
+CREATE TABLE IF NOT EXISTS scheduling_notifications (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    task_id UUID REFERENCES scheduling_tasks(id) ON DELETE CASCADE,
+    staff_id UUID REFERENCES staff(id) ON DELETE CASCADE,
+    notification_type VARCHAR(50) NOT NULL, -- 'assignment', 'reminder', 'change', 'cancellation'
+    sent_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    status VARCHAR(20) DEFAULT 'sent', -- 'sent', 'failed', 'pending'
+    message_content TEXT
+);
+
 -- Document management table
 CREATE TABLE IF NOT EXISTS documents (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),

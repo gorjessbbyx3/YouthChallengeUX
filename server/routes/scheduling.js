@@ -1,446 +1,363 @@
-
 const express = require('express');
-const { db } = require('../database/init');
-const { authenticateToken } = require('../middleware/auth');
-const router = express.Router();
-
-// Get all schedules
-router.get('/', authenticateToken, (req, res) => {
-  db.all(`
-    SELECT s.*, st.first_name as staff_name, st.last_name as staff_last_name
-    FROM schedules s
-    LEFT JOIN staff st ON s.staff_id = st.id
-    ORDER BY s.date, s.start_time
-  `, (err, schedules) => {
-    if (err) {
-      return res.status(500).json({ error: err.message });
-    }
-    res.json(schedules);
-  });
-});
-
-// Create new schedule
-router.post('/', authenticateToken, (req, res) => {
-  const { staff_id, date, start_time, end_time, task_type, location, notes } = req.body;
-  
-  db.run(`
-    INSERT INTO schedules (staff_id, date, start_time, end_time, task_type, location, notes)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-  `, [staff_id, date, start_time, end_time, task_type, location, notes],
-  function(err) {
-    if (err) {
-      return res.status(400).json({ error: err.message });
-    }
-    res.status(201).json({ id: this.lastID, message: 'Schedule created successfully' });
-  });
-});
-
-// AI-powered schedule optimization using Hugging Face
-router.post('/optimize', authenticateToken, async (req, res) => {
-  try {
-    const { date, tasks } = req.body;
-    
-    // Get staff data with historical schedule information
-    const staff = await new Promise((resolve, reject) => {
-      db.all(`
-        SELECT s.*, 
-               COALESCE(COUNT(sch.id), 0) as current_shifts,
-               GROUP_CONCAT(sch.task_type) as task_history,
-               AVG(CASE WHEN sch.notes LIKE '%excellent%' OR sch.notes LIKE '%good%' THEN 1 ELSE 0 END) as performance_score
-        FROM staff s
-        LEFT JOIN schedules sch ON s.id = sch.staff_id 
-        WHERE s.status = 'active'
-        GROUP BY s.id
-        ORDER BY s.experience_years DESC, current_shifts ASC
-      `, (err, rows) => {
-        if (err) reject(err);
-        else resolve(rows);
-      });
-    });
-
-    // Get cadet risk information for assignment context
-    const cadets = await new Promise((resolve, reject) => {
-      db.all(`
-        SELECT COUNT(*) as total_cadets,
-               SUM(CASE WHEN behavior_score <= 2 THEN 1 ELSE 0 END) as high_risk_count
-        FROM cadets WHERE status = 'active'
-      `, (err, rows) => {
-        if (err) reject(err);
-        else resolve(rows[0]);
-      });
-    });
-
-    // AI-enhanced staff scoring
-    const scoredStaff = await Promise.all(staff.map(async (member) => {
-      const availabilityScore = await predictStaffAvailability(member);
-      const experienceWeight = Math.min(member.experience_years / 5, 1); // Cap at 5 years
-      const performanceWeight = member.performance_score || 0.5;
-      const workloadBalance = Math.max(0, 1 - (member.current_shifts / 3)); // Penalize overwork
-      
-      return {
-        ...member,
-        ai_score: (availabilityScore * 0.3) + (experienceWeight * 0.4) + (performanceWeight * 0.2) + (workloadBalance * 0.1),
-        predicted_availability: availabilityScore
-      };
-    }));
-
-    // Optimize assignments using AI scores
-    const optimizedSchedule = tasks.map(task => {
-      let eligibleStaff = scoredStaff.filter(s => 
-        s.current_shifts < 2 && // Max 2 shifts per day
-        s.predicted_availability > 0.6 // AI confidence threshold
-      );
-
-      // Prioritize experienced staff for high-risk situations
-      if (task.requires_experience || task.high_risk_cadets) {
-        eligibleStaff = eligibleStaff.filter(s => s.experience_years >= 2);
-      }
-
-      // Sort by AI score and select best matches
-      eligibleStaff.sort((a, b) => b.ai_score - a.ai_score);
-      const assignedStaff = eligibleStaff.slice(0, task.required_staff || 1);
-
-      return {
-        task: task.name,
-        time: task.time,
-        assigned_staff: assignedStaff,
-        priority: task.priority || 'medium',
-        ai_confidence: assignedStaff.length > 0 ? Math.min(...assignedStaff.map(s => s.ai_score)) : 0,
-        assignment_rationale: generateAssignmentRationale(task, assignedStaff, cadets)
-      };
-    });
-
-    // Generate AI-powered recommendations
-    const recommendations = generateAIRecommendations(optimizedSchedule, staff, cadets);
-
-    res.json({
-      date,
-      optimized_schedule: optimizedSchedule,
-      recommendations,
-      ai_metadata: {
-        total_staff_analyzed: staff.length,
-        high_risk_cadets: cadets.high_risk_count,
-        optimization_confidence: calculateOverallConfidence(optimizedSchedule)
-      }
-    });
-
-  } catch (error) {
-    console.error('AI scheduling optimization error:', error);
-    res.status(500).json({ 
-      error: 'AI optimization failed, falling back to basic scheduling',
-      fallback: true 
-    });
-  }
-});
-
-// AI availability prediction function
-async function predictStaffAvailability(staffMember) {
-  try {
-    // Create schedule data for AI analysis
-    const scheduleData = `
-      Staff: ${staffMember.name}
-      Experience: ${staffMember.experience_years} years
-      Role: ${staffMember.role}
-      Recent tasks: ${staffMember.task_history || 'none'}
-      Current shifts: ${staffMember.current_shifts}
-      Performance: ${(staffMember.performance_score || 0.5) * 100}%
-    `;
-
-    // For now, use rule-based scoring (can be replaced with actual HF model)
-    let availabilityScore = 0.8; // Base score
-
-    // Adjust based on current workload
-    if (staffMember.current_shifts === 0) availabilityScore += 0.1;
-    if (staffMember.current_shifts >= 2) availabilityScore -= 0.3;
-
-    // Adjust based on experience
-    availabilityScore += Math.min(staffMember.experience_years * 0.02, 0.1);
-
-    // Adjust based on performance
-    if (staffMember.performance_score) {
-      availabilityScore += (staffMember.performance_score - 0.5) * 0.2;
-    }
-
-    return Math.max(0, Math.min(1, availabilityScore));
-  } catch (error) {
-    console.error('Availability prediction error:', error);
-    return 0.5; // Default moderate availability
-  }
-}
-
-function generateAssignmentRationale(task, assignedStaff, cadetInfo) {
-  const rationales = [];
-  
-  if (assignedStaff.length === 0) {
-    return ['No suitable staff available - consider adjusting requirements'];
-  }
-
-  assignedStaff.forEach(staff => {
-    if (staff.experience_years >= 3) {
-      rationales.push(`${staff.name}: High experience (${staff.experience_years}yr) suitable for ${task.name}`);
-    }
-    if (staff.ai_score > 0.8) {
-      rationales.push(`${staff.name}: AI confidence score ${(staff.ai_score * 100).toFixed(0)}%`);
-    }
-    if (staff.current_shifts === 0) {
-      rationales.push(`${staff.name}: Available with no current shifts`);
-    }
-  });
-
-  return rationales.length > 0 ? rationales : ['Standard assignment based on availability'];
-}
-
-function generateAIRecommendations(schedule, staff, cadetInfo) {
-  const recommendations = [];
-  
-  const highConfidenceAssignments = schedule.filter(s => s.ai_confidence > 0.7).length;
-  const totalAssignments = schedule.length;
-  
-  if (highConfidenceAssignments / totalAssignments < 0.6) {
-    recommendations.push('Consider recruiting additional experienced staff for better coverage');
-  }
-  
-  if (cadetInfo.high_risk_count > 0) {
-    const experiencedStaffCount = staff.filter(s => s.experience_years >= 2).length;
-    if (experiencedStaffCount < cadetInfo.high_risk_count) {
-      recommendations.push(`${cadetInfo.high_risk_count} high-risk cadets need experienced staff supervision`);
-    }
-  }
-  
-  const overworkedStaff = staff.filter(s => s.current_shifts >= 2);
-  if (overworkedStaff.length > 0) {
-    recommendations.push(`Consider redistributing load - ${overworkedStaff.length} staff at capacity`);
-  }
-  
-  recommendations.push('AI suggests rotating experienced staff to prevent burnout');
-  recommendations.push('Monitor assignment effectiveness and provide feedback for AI improvement');
-  
-  return recommendations;
-}
-
-function calculateOverallConfidence(schedule) {
-  if (schedule.length === 0) return 0;
-  const totalConfidence = schedule.reduce((sum, s) => sum + (s.ai_confidence || 0), 0);
-  return (totalConfidence / schedule.length * 100).toFixed(1);
-}
-
-module.exports = router;
-const express = require('express');
-const router = express.Router();
 const { supabase } = require('../database/supabase');
+const { authenticateToken } = require('../middleware/auth');
+const nodemailer = require('nodemailer');
+const cron = require('node-cron');
+const router = express.Router();
 
-// Get all staff schedules
-router.get('/', async (req, res) => {
+// Configure email transporter
+const transporter = nodemailer.createTransport({
+  host: process.env.SMTP_HOST,
+  port: process.env.SMTP_PORT,
+  secure: false,
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS
+  }
+});
+
+// Get all scheduling tasks
+router.get('/tasks', authenticateToken, async (req, res) => {
   try {
-    const { date, staff_id } = req.query;
-    
-    let query = supabase
-      .from('staff_schedules')
+    const { data: tasks, error } = await supabase
+      .from('scheduling_tasks')
       .select(`
         *,
-        staff (id, first_name, last_name, role)
+        staff_assignments (
+          staff_id,
+          staff (id, name, role)
+        )
       `)
-      .order('date', { ascending: true })
       .order('start_time', { ascending: true });
 
-    if (date) {
-      query = query.eq('date', date);
-    }
-    
-    if (staff_id) {
-      query = query.eq('staff_id', staff_id);
-    }
+    if (error) throw error;
 
-    const { data, error } = await query;
+    // Format tasks with assigned staff
+    const formattedTasks = tasks.map(task => ({
+      ...task,
+      assignedStaff: task.staff_assignments?.map(assignment => assignment.staff_id) || []
+    }));
 
-    if (error) {
-      console.error('Error fetching schedules:', error);
-      return res.status(500).json({ error: 'Failed to fetch schedules' });
-    }
-
-    res.json(data);
+    res.json(formattedTasks);
   } catch (error) {
-    console.error('Error in GET /schedules:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    console.error('Error fetching tasks:', error);
+    res.status(500).json({ error: 'Failed to fetch tasks' });
   }
 });
 
-// Create new schedule/task
-router.post('/', async (req, res) => {
+// Create new scheduling task
+router.post('/tasks', authenticateToken, async (req, res) => {
   try {
     const {
-      staff_id,
-      task_name,
+      title,
       description,
-      date,
-      start_time,
-      end_time,
-      location,
-      required_staff = 1
+      startTime,
+      endTime,
+      requiredStaff,
+      priority,
+      category,
+      assignedStaff
     } = req.body;
 
-    // Validate required fields
-    if (!task_name || !date || !start_time || !end_time) {
-      return res.status(400).json({ error: 'Missing required fields' });
-    }
-
-    const { data, error } = await supabase
-      .from('staff_schedules')
+    // Create the task
+    const { data: task, error: taskError } = await supabase
+      .from('scheduling_tasks')
       .insert({
-        staff_id,
-        task_name,
+        title,
         description,
-        date,
-        start_time,
-        end_time,
-        location,
-        required_staff,
-        status: 'scheduled'
+        start_time: startTime,
+        end_time: endTime,
+        required_staff: requiredStaff,
+        priority,
+        category,
+        created_by: req.user.id
       })
       .select()
       .single();
 
-    if (error) {
-      console.error('Error creating schedule:', error);
-      return res.status(500).json({ error: 'Failed to create schedule' });
+    if (taskError) throw taskError;
+
+    // Assign staff to the task
+    if (assignedStaff && assignedStaff.length > 0) {
+      const assignments = assignedStaff.map(staffId => ({
+        task_id: task.id,
+        staff_id: staffId
+      }));
+
+      const { error: assignmentError } = await supabase
+        .from('staff_assignments')
+        .insert(assignments);
+
+      if (assignmentError) throw assignmentError;
     }
 
-    res.status(201).json(data);
+    res.status(201).json(task);
   } catch (error) {
-    console.error('Error in POST /schedules:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    console.error('Error creating task:', error);
+    res.status(500).json({ error: 'Failed to create task' });
   }
 });
 
-// Update schedule
-router.put('/:id', async (req, res) => {
+// Get staff schedules
+router.get('/schedules', authenticateToken, async (req, res) => {
   try {
-    const { id } = req.params;
-    const updates = req.body;
+    const { data: schedules, error } = await supabase
+      .from('staff_assignments')
+      .select(`
+        *,
+        staff (id, name, role, email),
+        scheduling_tasks (*)
+      `)
+      .order('scheduling_tasks.start_time', { ascending: true });
 
-    const { data, error } = await supabase
-      .from('staff_schedules')
-      .update(updates)
-      .eq('id', id)
-      .select()
-      .single();
+    if (error) throw error;
 
-    if (error) {
-      console.error('Error updating schedule:', error);
-      return res.status(500).json({ error: 'Failed to update schedule' });
-    }
-
-    res.json(data);
+    res.json(schedules);
   } catch (error) {
-    console.error('Error in PUT /schedules:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    console.error('Error fetching schedules:', error);
+    res.status(500).json({ error: 'Failed to fetch schedules' });
   }
 });
 
-// Delete schedule
-router.delete('/:id', async (req, res) => {
+// Suggest staff assignments based on availability
+router.post('/suggest', authenticateToken, async (req, res) => {
   try {
-    const { id } = req.params;
+    const { startTime, endTime, requiredStaff, category } = req.body;
 
-    const { error } = await supabase
-      .from('staff_schedules')
-      .delete()
-      .eq('id', id);
-
-    if (error) {
-      console.error('Error deleting schedule:', error);
-      return res.status(500).json({ error: 'Failed to delete schedule' });
-    }
-
-    res.json({ message: 'Schedule deleted successfully' });
-  } catch (error) {
-    console.error('Error in DELETE /schedules:', error);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-// Assign staff to task
-router.post('/:id/assign', async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { staff_ids } = req.body;
-
-    if (!Array.isArray(staff_ids)) {
-      return res.status(400).json({ error: 'staff_ids must be an array' });
-    }
-
-    const { data, error } = await supabase
-      .from('staff_schedules')
-      .update({ 
-        assigned_staff: staff_ids,
-        status: staff_ids.length > 0 ? 'assigned' : 'scheduled'
-      })
-      .eq('id', id)
-      .select()
-      .single();
-
-    if (error) {
-      console.error('Error assigning staff:', error);
-      return res.status(500).json({ error: 'Failed to assign staff' });
-    }
-
-    res.json(data);
-  } catch (error) {
-    console.error('Error in POST /schedules/:id/assign:', error);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-// Get available staff for a time slot
-router.get('/available-staff', async (req, res) => {
-  try {
-    const { date, start_time, end_time } = req.query;
-
-    if (!date || !start_time || !end_time) {
-      return res.status(400).json({ error: 'Missing required parameters' });
-    }
-
-    // Get all staff
+    // Get all staff members
     const { data: allStaff, error: staffError } = await supabase
       .from('staff')
-      .select('id, first_name, last_name, role');
+      .select('*')
+      .eq('active', true);
 
-    if (staffError) {
-      console.error('Error fetching staff:', staffError);
-      return res.status(500).json({ error: 'Failed to fetch staff' });
-    }
+    if (staffError) throw staffError;
 
-    // Get conflicting schedules
+    // Get conflicting assignments
     const { data: conflicts, error: conflictError } = await supabase
-      .from('staff_schedules')
-      .select('assigned_staff')
-      .eq('date', date)
-      .or(`and(start_time.lte.${end_time},end_time.gte.${start_time})`);
+      .from('staff_assignments')
+      .select(`
+        staff_id,
+        scheduling_tasks (start_time, end_time)
+      `)
+      .or(`start_time.lte.${endTime},end_time.gte.${startTime}`);
 
-    if (conflictError) {
-      console.error('Error checking conflicts:', conflictError);
-      return res.status(500).json({ error: 'Failed to check conflicts' });
-    }
+    if (conflictError) throw conflictError;
 
-    // Extract conflicting staff IDs
-    const conflictingStaffIds = new Set();
-    conflicts.forEach(schedule => {
-      if (schedule.assigned_staff) {
-        schedule.assigned_staff.forEach(staffId => {
-          conflictingStaffIds.add(staffId);
-        });
+    // Filter available staff
+    const conflictedStaffIds = new Set(conflicts.map(c => c.staff_id));
+    const availableStaff = allStaff.filter(staff => !conflictedStaffIds.has(staff.id));
+
+    // Prioritize staff based on role and category
+    const rolePreferences = {
+      hiset: ['instructor', 'teacher'],
+      physical: ['fitness_instructor', 'drill_sergeant'],
+      supervision: ['counselor', 'supervisor'],
+      community: ['coordinator', 'supervisor'],
+      counseling: ['counselor', 'psychologist'],
+      admin: ['administrator', 'coordinator']
+    };
+
+    const preferredRoles = rolePreferences[category] || [];
+
+    // Sort staff by preference and availability
+    const sortedStaff = availableStaff.sort((a, b) => {
+      const aPreferred = preferredRoles.includes(a.role);
+      const bPreferred = preferredRoles.includes(b.role);
+
+      if (aPreferred && !bPreferred) return -1;
+      if (!aPreferred && bPreferred) return 1;
+      return 0;
+    });
+
+    // Take the required number of staff
+    const suggestedStaff = sortedStaff.slice(0, requiredStaff).map(staff => staff.id);
+
+    res.json({ 
+      suggestedStaff,
+      availableCount: availableStaff.length,
+      conflictCount: conflictedStaffIds.size
+    });
+  } catch (error) {
+    console.error('Error suggesting staff:', error);
+    res.status(500).json({ error: 'Failed to suggest staff assignments' });
+  }
+});
+
+// Check for schedule conflicts
+router.get('/conflicts', authenticateToken, async (req, res) => {
+  try {
+    const { data: assignments, error } = await supabase
+      .from('staff_assignments')
+      .select(`
+        *,
+        staff (id, name),
+        scheduling_tasks (id, title, start_time, end_time)
+      `);
+
+    if (error) throw error;
+
+    const conflicts = [];
+    const staffSchedules = {};
+
+    // Group assignments by staff
+    assignments.forEach(assignment => {
+      const staffId = assignment.staff_id;
+      if (!staffSchedules[staffId]) {
+        staffSchedules[staffId] = {
+          staff: assignment.staff,
+          tasks: []
+        };
+      }
+      staffSchedules[staffId].tasks.push(assignment.scheduling_tasks);
+    });
+
+    // Check for overlapping tasks for each staff member
+    Object.values(staffSchedules).forEach(schedule => {
+      const tasks = schedule.tasks.sort((a, b) => new Date(a.start_time) - new Date(b.start_time));
+
+      for (let i = 0; i < tasks.length - 1; i++) {
+        for (let j = i + 1; j < tasks.length; j++) {
+          const task1 = tasks[i];
+          const task2 = tasks[j];
+
+          const start1 = new Date(task1.start_time);
+          const end1 = new Date(task1.end_time);
+          const start2 = new Date(task2.start_time);
+          const end2 = new Date(task2.end_time);
+
+          // Check for overlap
+          if (start1 < end2 && start2 < end1) {
+            conflicts.push({
+              staffId: schedule.staff.id,
+              staffName: schedule.staff.name,
+              task1: task1.title,
+              task2: task2.title,
+              date: start1,
+              type: 'overlap'
+            });
+          }
+        }
       }
     });
 
-    // Filter available staff
-    const availableStaff = allStaff.filter(staff => 
-      !conflictingStaffIds.has(staff.id)
-    );
-
-    res.json(availableStaff);
+    res.json(conflicts);
   } catch (error) {
-    console.error('Error in GET /schedules/available-staff:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    console.error('Error checking conflicts:', error);
+    res.status(500).json({ error: 'Failed to check conflicts' });
+  }
+});
+
+// Send task notifications
+router.post('/notifications', authenticateToken, async (req, res) => {
+  try {
+    const { taskId, assignedStaff, taskDetails } = req.body;
+
+    // Get staff email addresses
+    const { data: staff, error } = await supabase
+      .from('staff')
+      .select('email, name')
+      .in('id', assignedStaff);
+
+    if (error) throw error;
+
+    // Send emails to assigned staff
+    const emailPromises = staff.map(member => {
+      const mailOptions = {
+        from: process.env.EMAIL_FROM,
+        to: member.email,
+        subject: `New Assignment: ${taskDetails.title}`,
+        html: `
+          <h2>New Task Assignment</h2>
+          <p>Dear ${member.name},</p>
+          <p>You have been assigned to a new task:</p>
+          <ul>
+            <li><strong>Task:</strong> ${taskDetails.title}</li>
+            <li><strong>Category:</strong> ${taskDetails.category}</li>
+            <li><strong>Start Time:</strong> ${new Date(taskDetails.startTime).toLocaleString()}</li>
+            <li><strong>End Time:</strong> ${new Date(taskDetails.endTime).toLocaleString()}</li>
+            <li><strong>Priority:</strong> ${taskDetails.priority}</li>
+          </ul>
+          ${taskDetails.description ? `<p><strong>Description:</strong> ${taskDetails.description}</p>` : ''}
+          <p>Please confirm your availability and prepare accordingly.</p>
+          <p>Thank you,<br>YCA CRM System</p>
+        `
+      };
+
+      return transporter.sendMail(mailOptions);
+    });
+
+    await Promise.all(emailPromises);
+
+    res.json({ message: 'Notifications sent successfully' });
+  } catch (error) {
+    console.error('Error sending notifications:', error);
+    res.status(500).json({ error: 'Failed to send notifications' });
+  }
+});
+
+// Schedule automatic reminders
+cron.schedule('0 8 * * *', async () => {
+  console.log('Sending daily schedule reminders...');
+
+  try {
+    // Get today's assignments
+    const today = new Date().toISOString().split('T')[0];
+
+    const { data: todayAssignments, error } = await supabase
+      .from('staff_assignments')
+      .select(`
+        *,
+        staff (email, name),
+        scheduling_tasks (title, start_time, end_time, category)
+      `)
+      .gte('scheduling_tasks.start_time', `${today}T00:00:00`)
+      .lt('scheduling_tasks.start_time', `${today}T23:59:59`);
+
+    if (error) throw error;
+
+    // Group by staff and send reminders
+    const staffReminders = {};
+    todayAssignments.forEach(assignment => {
+      const staffId = assignment.staff_id;
+      if (!staffReminders[staffId]) {
+        staffReminders[staffId] = {
+          staff: assignment.staff,
+          tasks: []
+        };
+      }
+      staffReminders[staffId].tasks.push(assignment.scheduling_tasks);
+    });
+
+    // Send reminder emails
+    for (const [staffId, reminder] of Object.entries(staffReminders)) {
+      const tasksHtml = reminder.tasks.map(task => `
+        <li>
+          <strong>${task.title}</strong><br>
+          Time: ${new Date(task.start_time).toLocaleTimeString()} - ${new Date(task.end_time).toLocaleTimeString()}<br>
+          Category: ${task.category}
+        </li>
+      `).join('');
+
+      const mailOptions = {
+        from: process.env.EMAIL_FROM,
+        to: reminder.staff.email,
+        subject: 'Daily Schedule Reminder - YCA',
+        html: `
+          <h2>Your Schedule for Today</h2>
+          <p>Dear ${reminder.staff.name},</p>
+          <p>Here are your assignments for today:</p>
+          <ul>${tasksHtml}</ul>
+          <p>Have a great day!</p>
+          <p>YCA CRM System</p>
+        `
+      };
+
+      await transporter.sendMail(mailOptions);
+    }
+
+    console.log('Daily reminders sent successfully');
+  } catch (error) {
+    console.error('Error sending daily reminders:', error);
   }
 });
 

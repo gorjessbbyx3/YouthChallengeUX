@@ -1,10 +1,10 @@
 
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
 import {
   Card,
   CardContent,
   Typography,
+  Grid,
   Button,
   Dialog,
   DialogTitle,
@@ -15,527 +15,529 @@ import {
   InputLabel,
   Select,
   MenuItem,
-  Grid,
-  Chip,
-  Box,
-  Alert,
-  Tabs,
-  Tab,
   List,
   ListItem,
   ListItemText,
-  ListItemSecondaryAction,
+  ListItemIcon,
   IconButton,
+  Chip,
+  Box,
+  Alert,
+  CircularProgress,
+  Paper,
+  Tabs,
+  Tab,
   Accordion,
   AccordionSummary,
   AccordionDetails
 } from '@mui/material';
 import {
   Add as AddIcon,
-  Edit as EditIcon,
-  Delete as DeleteIcon,
-  Assignment as AssignmentIcon,
-  Calendar as CalendarIcon,
-  ExpandMore as ExpandMoreIcon,
+  Event as EventIcon,
   Person as PersonIcon,
-  Schedule as ScheduleIcon
+  Schedule as ScheduleIcon,
+  Assignment as AssignmentIcon,
+  Email as EmailIcon,
+  Warning as WarningIcon,
+  CheckCircle as CheckIcon,
+  ExpandMore as ExpandMoreIcon,
+  CalendarToday as CalendarIcon,
+  AccessTime as TimeIcon
 } from '@mui/icons-material';
+import { Calendar, momentLocalizer } from 'react-big-calendar';
+import moment from 'moment';
+import axios from 'axios';
+import 'react-big-calendar/lib/css/react-big-calendar.css';
 
-const Scheduling = () => {
-  const [schedules, setSchedules] = useState([]);
+const localizer = momentLocalizer(moment);
+
+export const Scheduling = () => {
   const [staff, setStaff] = useState([]);
-  const [open, setOpen] = useState(false);
-  const [assignOpen, setAssignOpen] = useState(false);
-  const [currentSchedule, setCurrentSchedule] = useState(null);
-  const [availableStaff, setAvailableStaff] = useState([]);
-  const [selectedStaff, setSelectedStaff] = useState([]);
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
-  const [view, setView] = useState(0); // 0: Daily, 1: Weekly, 2: Tasks
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
-  const [formData, setFormData] = useState({
-    task_name: '',
+  const [tasks, setTasks] = useState([]);
+  const [schedules, setSchedules] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [openDialog, setOpenDialog] = useState(false);
+  const [tabValue, setTabValue] = useState(0);
+  const [conflicts, setConflicts] = useState([]);
+  const [reminders, setReminders] = useState([]);
+  
+  const [newTask, setNewTask] = useState({
+    title: '',
     description: '',
-    date: new Date().toISOString().split('T')[0],
-    start_time: '08:00',
-    end_time: '09:00',
-    location: '',
-    required_staff: 1
+    startTime: '',
+    endTime: '',
+    requiredStaff: 1,
+    priority: 'medium',
+    category: 'supervision',
+    assignedStaff: []
   });
 
+  const taskCategories = [
+    { value: 'hiset', label: 'HiSET Classes' },
+    { value: 'physical', label: 'Physical Training' },
+    { value: 'supervision', label: 'Cadet Supervision' },
+    { value: 'community', label: 'Community Service' },
+    { value: 'counseling', label: 'Counseling' },
+    { value: 'admin', label: 'Administrative' }
+  ];
+
+  const priorities = [
+    { value: 'low', label: 'Low', color: '#4caf50' },
+    { value: 'medium', label: 'Medium', color: '#ff9800' },
+    { value: 'high', label: 'High', color: '#f44336' },
+    { value: 'critical', label: 'Critical', color: '#9c27b0' }
+  ];
+
   useEffect(() => {
-    fetchSchedules();
-    fetchStaff();
-  }, [selectedDate]);
+    fetchData();
+  }, []);
 
-  const fetchSchedules = async () => {
+  const fetchData = async () => {
+    setLoading(true);
     try {
-      const response = await axios.get(`/api/scheduling?date=${selectedDate}`);
-      setSchedules(response.data);
+      const [staffRes, tasksRes, schedulesRes] = await Promise.all([
+        axios.get('/api/staff'),
+        axios.get('/api/scheduling/tasks'),
+        axios.get('/api/scheduling/schedules')
+      ]);
+      
+      setStaff(staffRes.data);
+      setTasks(tasksRes.data);
+      setSchedules(schedulesRes.data);
+      
+      // Check for conflicts
+      await checkScheduleConflicts();
     } catch (error) {
-      console.error('Error fetching schedules:', error);
-      setError('Failed to fetch schedules');
+      console.error('Error fetching scheduling data:', error);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const fetchStaff = async () => {
+  const checkScheduleConflicts = async () => {
     try {
-      const response = await axios.get('/api/staff');
-      setStaff(response.data);
+      const response = await axios.get('/api/scheduling/conflicts');
+      setConflicts(response.data);
     } catch (error) {
-      console.error('Error fetching staff:', error);
-      setError('Failed to fetch staff');
+      console.error('Error checking conflicts:', error);
     }
   };
 
-  const fetchAvailableStaff = async (date, startTime, endTime) => {
+  const handleCreateTask = async () => {
     try {
-      const response = await axios.get('/api/scheduling/available-staff', {
-        params: { date, start_time: startTime, end_time: endTime }
+      setLoading(true);
+      
+      // Auto-assign available staff
+      const suggestedStaff = await suggestStaffAssignment();
+      const taskData = {
+        ...newTask,
+        assignedStaff: suggestedStaff
+      };
+      
+      await axios.post('/api/scheduling/tasks', taskData);
+      
+      // Send notifications
+      await sendTaskNotifications(taskData);
+      
+      setOpenDialog(false);
+      setNewTask({
+        title: '',
+        description: '',
+        startTime: '',
+        endTime: '',
+        requiredStaff: 1,
+        priority: 'medium',
+        category: 'supervision',
+        assignedStaff: []
       });
-      setAvailableStaff(response.data);
+      
+      fetchData();
     } catch (error) {
-      console.error('Error fetching available staff:', error);
-      setError('Failed to fetch available staff');
+      console.error('Error creating task:', error);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const suggestStaffAssignment = async () => {
     try {
-      if (currentSchedule) {
-        await axios.put(`/api/scheduling/${currentSchedule.id}`, formData);
-        setSuccess('Schedule updated successfully');
-      } else {
-        await axios.post('/api/scheduling', formData);
-        setSuccess('Schedule created successfully');
-      }
-      setOpen(false);
-      setCurrentSchedule(null);
-      resetForm();
-      fetchSchedules();
-    } catch (error) {
-      console.error('Error saving schedule:', error);
-      setError('Failed to save schedule');
-    }
-  };
-
-  const handleEdit = (schedule) => {
-    setCurrentSchedule(schedule);
-    setFormData({
-      task_name: schedule.task_name,
-      description: schedule.description || '',
-      date: schedule.date,
-      start_time: schedule.start_time,
-      end_time: schedule.end_time,
-      location: schedule.location || '',
-      required_staff: schedule.required_staff
-    });
-    setOpen(true);
-  };
-
-  const handleDelete = async (id) => {
-    if (window.confirm('Are you sure you want to delete this schedule?')) {
-      try {
-        await axios.delete(`/api/scheduling/${id}`);
-        setSuccess('Schedule deleted successfully');
-        fetchSchedules();
-      } catch (error) {
-        console.error('Error deleting schedule:', error);
-        setError('Failed to delete schedule');
-      }
-    }
-  };
-
-  const handleAssign = (schedule) => {
-    setCurrentSchedule(schedule);
-    setSelectedStaff(schedule.assigned_staff || []);
-    fetchAvailableStaff(schedule.date, schedule.start_time, schedule.end_time);
-    setAssignOpen(true);
-  };
-
-  const handleStaffAssignment = async () => {
-    try {
-      await axios.post(`/api/scheduling/${currentSchedule.id}/assign`, {
-        staff_ids: selectedStaff
+      const response = await axios.post('/api/scheduling/suggest', {
+        startTime: newTask.startTime,
+        endTime: newTask.endTime,
+        requiredStaff: newTask.requiredStaff,
+        category: newTask.category
       });
-      setSuccess('Staff assigned successfully');
-      setAssignOpen(false);
-      setCurrentSchedule(null);
-      setSelectedStaff([]);
-      fetchSchedules();
+      return response.data.suggestedStaff;
     } catch (error) {
-      console.error('Error assigning staff:', error);
-      setError('Failed to assign staff');
+      console.error('Error getting staff suggestions:', error);
+      return [];
     }
   };
 
-  const resetForm = () => {
-    setFormData({
-      task_name: '',
-      description: '',
-      date: new Date().toISOString().split('T')[0],
-      start_time: '08:00',
-      end_time: '09:00',
-      location: '',
-      required_staff: 1
-    });
+  const sendTaskNotifications = async (task) => {
+    try {
+      await axios.post('/api/scheduling/notifications', {
+        taskId: task.id,
+        assignedStaff: task.assignedStaff,
+        taskDetails: task
+      });
+    } catch (error) {
+      console.error('Error sending notifications:', error);
+    }
   };
 
-  const getWeekDates = () => {
-    const current = new Date(selectedDate);
-    const week = [];
-    const startOfWeek = current.getDate() - current.getDay();
+  const getEventColor = (category, priority) => {
+    const categoryColors = {
+      hiset: '#2196f3',
+      physical: '#4caf50',
+      supervision: '#ff9800',
+      community: '#9c27b0',
+      counseling: '#607d8b',
+      admin: '#795548'
+    };
     
-    for (let i = 0; i < 7; i++) {
-      const day = new Date(current.setDate(startOfWeek + i));
-      week.push(day.toISOString().split('T')[0]);
-    }
-    return week;
+    const priorityIntensity = {
+      low: 0.6,
+      medium: 0.8,
+      high: 1.0,
+      critical: 1.0
+    };
+    
+    const baseColor = categoryColors[category] || '#9e9e9e';
+    const intensity = priorityIntensity[priority] || 0.8;
+    
+    return `${baseColor}${Math.round(intensity * 255).toString(16).padStart(2, '0')}`;
   };
 
-  const getSchedulesForDate = (date) => {
-    return schedules.filter(schedule => schedule.date === date);
+  const calendarEvents = tasks.map(task => ({
+    id: task.id,
+    title: `${task.title} (${task.assignedStaff?.length || 0}/${task.requiredStaff})`,
+    start: new Date(task.startTime),
+    end: new Date(task.endTime),
+    resource: task
+  }));
+
+  const CustomEvent = ({ event }) => {
+    const task = event.resource;
+    const isUnderStaffed = (task.assignedStaff?.length || 0) < task.requiredStaff;
+    
+    return (
+      <div style={{ 
+        backgroundColor: getEventColor(task.category, task.priority),
+        color: 'white',
+        padding: '2px 4px',
+        borderRadius: '4px',
+        fontSize: '12px',
+        border: isUnderStaffed ? '2px solid #f44336' : 'none'
+      }}>
+        <div style={{ fontWeight: 'bold' }}>{task.title}</div>
+        <div style={{ fontSize: '10px' }}>
+          {task.assignedStaff?.length || 0}/{task.requiredStaff} staff
+          {isUnderStaffed && <WarningIcon style={{ fontSize: '12px', marginLeft: '4px' }} />}
+        </div>
+      </div>
+    );
   };
 
-  const getStaffName = (staffId) => {
-    const staffMember = staff.find(s => s.id === staffId);
-    return staffMember ? `${staffMember.first_name} ${staffMember.last_name}` : 'Unknown';
-  };
-
-  const formatTime = (time) => {
-    return new Date(`2000-01-01T${time}`).toLocaleTimeString([], {
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-  };
-
-  const TaskCard = ({ schedule }) => (
-    <Card sx={{ mb: 1, border: schedule.status === 'assigned' ? '2px solid #4caf50' : '1px solid #e0e0e0' }}>
-      <CardContent sx={{ py: 1 }}>
-        <Grid container spacing={2} alignItems="center">
-          <Grid item xs={12} sm={4}>
-            <Typography variant="subtitle2" fontWeight="bold">
-              {schedule.task_name}
-            </Typography>
-            <Typography variant="caption" color="textSecondary">
-              {formatTime(schedule.start_time)} - {formatTime(schedule.end_time)}
-            </Typography>
-          </Grid>
-          <Grid item xs={12} sm={3}>
-            <Typography variant="caption" display="block">
-              {schedule.location || 'No location'}
-            </Typography>
-            <Typography variant="caption" color="textSecondary">
-              Needs {schedule.required_staff} staff
-            </Typography>
-          </Grid>
-          <Grid item xs={12} sm={3}>
-            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-              {schedule.assigned_staff?.map(staffId => (
-                <Chip
-                  key={staffId}
-                  label={getStaffName(staffId)}
-                  size="small"
-                  color="primary"
-                  icon={<PersonIcon />}
-                />
-              )) || <Chip label="Unassigned" size="small" variant="outlined" />}
-            </Box>
-          </Grid>
-          <Grid item xs={12} sm={2}>
-            <Box sx={{ display: 'flex', gap: 0.5 }}>
-              <IconButton size="small" onClick={() => handleAssign(schedule)}>
-                <AssignmentIcon />
-              </IconButton>
-              <IconButton size="small" onClick={() => handleEdit(schedule)}>
-                <EditIcon />
-              </IconButton>
-              <IconButton size="small" onClick={() => handleDelete(schedule.id)}>
-                <DeleteIcon />
-              </IconButton>
-            </Box>
-          </Grid>
-        </Grid>
-      </CardContent>
-    </Card>
-  );
-
-  return (
-    <Box sx={{ p: 3 }}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Typography variant="h4" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <ScheduleIcon /> Staff Scheduling
-        </Typography>
+  const WeeklyView = () => (
+    <Box>
+      <Box sx={{ mb: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <Typography variant="h6">Weekly Schedule</Typography>
         <Button
           variant="contained"
           startIcon={<AddIcon />}
-          onClick={() => {
-            setCurrentSchedule(null);
-            resetForm();
-            setOpen(true);
-          }}
+          onClick={() => setOpenDialog(true)}
         >
           Add Task
         </Button>
       </Box>
+      
+      <Calendar
+        localizer={localizer}
+        events={calendarEvents}
+        startAccessor="start"
+        endAccessor="end"
+        style={{ height: 600 }}
+        views={['week', 'day']}
+        defaultView="week"
+        components={{
+          event: CustomEvent
+        }}
+        onSelectEvent={(event) => {
+          // Handle event selection
+          console.log('Selected event:', event);
+        }}
+      />
+    </Box>
+  );
 
-      {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
-      {success && <Alert severity="success" sx={{ mb: 2 }}>{success}</Alert>}
+  const StaffAvailabilityView = () => (
+    <Grid container spacing={2}>
+      {staff.map(member => (
+        <Grid item xs={12} md={6} key={member.id}>
+          <Card>
+            <CardContent>
+              <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                <PersonIcon sx={{ mr: 1 }} />
+                <Typography variant="h6">{member.name}</Typography>
+                <Chip 
+                  label={member.role} 
+                  size="small" 
+                  sx={{ ml: 2 }}
+                  color={member.available ? 'success' : 'default'}
+                />
+              </Box>
+              
+              <Typography variant="subtitle2" gutterBottom>
+                Current Assignments Today:
+              </Typography>
+              
+              <List dense>
+                {tasks
+                  .filter(task => 
+                    task.assignedStaff?.includes(member.id) &&
+                    moment(task.startTime).isSame(moment(), 'day')
+                  )
+                  .map(task => (
+                    <ListItem key={task.id}>
+                      <ListItemIcon>
+                        <AssignmentIcon fontSize="small" />
+                      </ListItemIcon>
+                      <ListItemText
+                        primary={task.title}
+                        secondary={`${moment(task.startTime).format('HH:mm')} - ${moment(task.endTime).format('HH:mm')}`}
+                      />
+                    </ListItem>
+                  ))
+                }
+              </List>
+              
+              {member.weeklyHours && (
+                <Box sx={{ mt: 2 }}>
+                  <Typography variant="caption">
+                    Weekly Hours: {member.weeklyHours.current || 0}/{member.weeklyHours.max || 40}
+                  </Typography>
+                </Box>
+              )}
+            </CardContent>
+          </Card>
+        </Grid>
+      ))}
+    </Grid>
+  );
 
-      <Box sx={{ display: 'flex', gap: 2, mb: 3, alignItems: 'center' }}>
-        <TextField
-          type="date"
-          value={selectedDate}
-          onChange={(e) => setSelectedDate(e.target.value)}
-          label="Selected Date"
-          InputLabelProps={{ shrink: true }}
-        />
-        <Tabs value={view} onChange={(e, newValue) => setView(newValue)}>
-          <Tab label="Daily View" />
-          <Tab label="Weekly View" />
-          <Tab label="All Tasks" />
+  const ConflictsAndAlertsView = () => (
+    <Box>
+      {conflicts.length > 0 && (
+        <Alert severity="warning" sx={{ mb: 2 }}>
+          {conflicts.length} schedule conflict(s) detected. Please review assignments.
+        </Alert>
+      )}
+      
+      <Grid container spacing={2}>
+        <Grid item xs={12} md={6}>
+          <Card>
+            <CardContent>
+              <Typography variant="h6" gutterBottom>
+                <WarningIcon sx={{ mr: 1, verticalAlign: 'middle' }} />
+                Schedule Conflicts
+              </Typography>
+              
+              {conflicts.length === 0 ? (
+                <Box sx={{ textAlign: 'center', py: 4 }}>
+                  <CheckIcon color="success" sx={{ fontSize: 48, mb: 1 }} />
+                  <Typography color="text.secondary">
+                    No conflicts detected
+                  </Typography>
+                </Box>
+              ) : (
+                <List>
+                  {conflicts.map((conflict, index) => (
+                    <ListItem key={index} divider>
+                      <ListItemText
+                        primary={`${conflict.staffName} - Double Booking`}
+                        secondary={`${conflict.task1} conflicts with ${conflict.task2} on ${moment(conflict.date).format('MMM DD, YYYY')}`}
+                      />
+                    </ListItem>
+                  ))}
+                </List>
+              )}
+            </CardContent>
+          </Card>
+        </Grid>
+        
+        <Grid item xs={12} md={6}>
+          <Card>
+            <CardContent>
+              <Typography variant="h6" gutterBottom>
+                <EmailIcon sx={{ mr: 1, verticalAlign: 'middle' }} />
+                Upcoming Reminders
+              </Typography>
+              
+              <List>
+                {tasks
+                  .filter(task => moment(task.startTime).isAfter(moment()) && moment(task.startTime).isBefore(moment().add(24, 'hours')))
+                  .slice(0, 5)
+                  .map(task => (
+                    <ListItem key={task.id}>
+                      <ListItemIcon>
+                        <TimeIcon fontSize="small" />
+                      </ListItemIcon>
+                      <ListItemText
+                        primary={task.title}
+                        secondary={`Tomorrow at ${moment(task.startTime).format('HH:mm')} - ${task.assignedStaff?.length || 0} staff assigned`}
+                      />
+                    </ListItem>
+                  ))
+                }
+              </List>
+            </CardContent>
+          </Card>
+        </Grid>
+      </Grid>
+    </Box>
+  );
+
+  return (
+    <Box>
+      <Box sx={{ mb: 3 }}>
+        <Typography variant="h4" gutterBottom>
+          Staff Scheduling
+        </Typography>
+        <Typography variant="subtitle1" color="text.secondary">
+          Manage staff schedules, assignments, and availability across all YCA activities
+        </Typography>
+      </Box>
+
+      <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
+        <Tabs value={tabValue} onChange={(e, newValue) => setTabValue(newValue)}>
+          <Tab icon={<CalendarIcon />} label="Weekly Schedule" />
+          <Tab icon={<PersonIcon />} label="Staff Availability" />
+          <Tab icon={<WarningIcon />} label="Conflicts & Alerts" />
         </Tabs>
       </Box>
 
-      {/* Daily View */}
-      {view === 0 && (
-        <Card>
-          <CardContent>
-            <Typography variant="h6" sx={{ mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
-              <CalendarIcon />
-              Schedule for {new Date(selectedDate).toLocaleDateString()}
-            </Typography>
-            {getSchedulesForDate(selectedDate).length === 0 ? (
-              <Typography color="textSecondary">No tasks scheduled for this day</Typography>
-            ) : (
-              getSchedulesForDate(selectedDate).map(schedule => (
-                <TaskCard key={schedule.id} schedule={schedule} />
-              ))
-            )}
-          </CardContent>
-        </Card>
+      {loading && (
+        <Box sx={{ display: 'flex', justifyContent: 'center', my: 4 }}>
+          <CircularProgress />
+        </Box>
       )}
 
-      {/* Weekly View */}
-      {view === 1 && (
-        <Grid container spacing={2}>
-          {getWeekDates().map(date => (
-            <Grid item xs={12} md={6} lg={4} key={date}>
-              <Card>
-                <CardContent>
-                  <Typography variant="h6" sx={{ mb: 2 }}>
-                    {new Date(date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
-                  </Typography>
-                  {getSchedulesForDate(date).length === 0 ? (
-                    <Typography variant="caption" color="textSecondary">No tasks</Typography>
-                  ) : (
-                    getSchedulesForDate(date).map(schedule => (
-                      <Box key={schedule.id} sx={{ mb: 1, p: 1, bgcolor: 'grey.50', borderRadius: 1 }}>
-                        <Typography variant="caption" fontWeight="bold">
-                          {schedule.task_name}
-                        </Typography>
-                        <Typography variant="caption" display="block">
-                          {formatTime(schedule.start_time)} - {formatTime(schedule.end_time)}
-                        </Typography>
-                        <Typography variant="caption" color="textSecondary">
-                          {schedule.assigned_staff?.length || 0}/{schedule.required_staff} staff
-                        </Typography>
-                      </Box>
-                    ))
-                  )}
-                </CardContent>
-              </Card>
-            </Grid>
-          ))}
-        </Grid>
+      {!loading && (
+        <>
+          {tabValue === 0 && <WeeklyView />}
+          {tabValue === 1 && <StaffAvailabilityView />}
+          {tabValue === 2 && <ConflictsAndAlertsView />}
+        </>
       )}
 
-      {/* All Tasks View */}
-      {view === 2 && (
-        <Card>
-          <CardContent>
-            <Typography variant="h6" sx={{ mb: 2 }}>All Upcoming Tasks</Typography>
-            {schedules.length === 0 ? (
-              <Typography color="textSecondary">No tasks scheduled</Typography>
-            ) : (
-              schedules.map(schedule => (
-                <Accordion key={schedule.id}>
-                  <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, width: '100%' }}>
-                      <Typography variant="subtitle1">{schedule.task_name}</Typography>
-                      <Typography variant="caption">
-                        {new Date(schedule.date).toLocaleDateString()} • {formatTime(schedule.start_time)}
-                      </Typography>
-                      <Chip
-                        label={schedule.status}
-                        size="small"
-                        color={schedule.status === 'assigned' ? 'success' : 'default'}
-                      />
-                    </Box>
-                  </AccordionSummary>
-                  <AccordionDetails>
-                    <TaskCard schedule={schedule} />
-                  </AccordionDetails>
-                </Accordion>
-              ))
-            )}
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Add/Edit Task Dialog */}
-      <Dialog open={open} onClose={() => setOpen(false)} maxWidth="sm" fullWidth>
-        <form onSubmit={handleSubmit}>
-          <DialogTitle>
-            {currentSchedule ? 'Edit Task' : 'Add New Task'}
-          </DialogTitle>
-          <DialogContent>
-            <Grid container spacing={2} sx={{ mt: 1 }}>
-              <Grid item xs={12}>
-                <TextField
-                  fullWidth
-                  label="Task Name"
-                  value={formData.task_name}
-                  onChange={(e) => setFormData({ ...formData, task_name: e.target.value })}
-                  required
-                />
-              </Grid>
-              <Grid item xs={12}>
-                <TextField
-                  fullWidth
-                  multiline
-                  rows={3}
-                  label="Description"
-                  value={formData.description}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                />
-              </Grid>
-              <Grid item xs={12} sm={4}>
-                <TextField
-                  fullWidth
-                  type="date"
-                  label="Date"
-                  value={formData.date}
-                  onChange={(e) => setFormData({ ...formData, date: e.target.value })}
-                  InputLabelProps={{ shrink: true }}
-                  required
-                />
-              </Grid>
-              <Grid item xs={12} sm={4}>
-                <TextField
-                  fullWidth
-                  type="time"
-                  label="Start Time"
-                  value={formData.start_time}
-                  onChange={(e) => setFormData({ ...formData, start_time: e.target.value })}
-                  InputLabelProps={{ shrink: true }}
-                  required
-                />
-              </Grid>
-              <Grid item xs={12} sm={4}>
-                <TextField
-                  fullWidth
-                  type="time"
-                  label="End Time"
-                  value={formData.end_time}
-                  onChange={(e) => setFormData({ ...formData, end_time: e.target.value })}
-                  InputLabelProps={{ shrink: true }}
-                  required
-                />
-              </Grid>
-              <Grid item xs={12} sm={8}>
-                <TextField
-                  fullWidth
-                  label="Location"
-                  value={formData.location}
-                  onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-                />
-              </Grid>
-              <Grid item xs={12} sm={4}>
-                <TextField
-                  fullWidth
-                  type="number"
-                  label="Required Staff"
-                  value={formData.required_staff}
-                  onChange={(e) => setFormData({ ...formData, required_staff: parseInt(e.target.value) })}
-                  inputProps={{ min: 1 }}
-                  required
-                />
-              </Grid>
-            </Grid>
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={() => setOpen(false)}>Cancel</Button>
-            <Button type="submit" variant="contained">
-              {currentSchedule ? 'Update' : 'Create'}
-            </Button>
-          </DialogActions>
-        </form>
-      </Dialog>
-
-      {/* Staff Assignment Dialog */}
-      <Dialog open={assignOpen} onClose={() => setAssignOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>
-          Assign Staff to: {currentSchedule?.task_name}
-        </DialogTitle>
+      {/* Create Task Dialog */}
+      <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="md" fullWidth>
+        <DialogTitle>Create New Task</DialogTitle>
         <DialogContent>
-          <Typography variant="subtitle2" sx={{ mb: 2 }}>
-            Available Staff for {currentSchedule?.date} ({formatTime(currentSchedule?.start_time || '')} - {formatTime(currentSchedule?.end_time || '')})
-          </Typography>
-          <List>
-            {availableStaff.map(staffMember => (
-              <ListItem key={staffMember.id}>
-                <ListItemText
-                  primary={`${staffMember.first_name} ${staffMember.last_name}`}
-                  secondary={staffMember.role}
-                />
-                <ListItemSecondaryAction>
-                  <Button
-                    variant={selectedStaff.includes(staffMember.id) ? "contained" : "outlined"}
-                    size="small"
-                    onClick={() => {
-                      if (selectedStaff.includes(staffMember.id)) {
-                        setSelectedStaff(prev => prev.filter(id => id !== staffMember.id));
-                      } else {
-                        setSelectedStaff(prev => [...prev, staffMember.id]);
-                      }
-                    }}
-                  >
-                    {selectedStaff.includes(staffMember.id) ? 'Remove' : 'Assign'}
-                  </Button>
-                </ListItemSecondaryAction>
-              </ListItem>
-            ))}
-          </List>
-          
-          {selectedStaff.length > 0 && (
-            <Box sx={{ mt: 2 }}>
-              <Typography variant="subtitle2" sx={{ mb: 1 }}>Selected Staff:</Typography>
-              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-                {selectedStaff.map(staffId => {
-                  const staffMember = staff.find(s => s.id === staffId);
-                  return (
-                    <Chip
-                      key={staffId}
-                      label={staffMember ? `${staffMember.first_name} ${staffMember.last_name}` : 'Unknown'}
-                      onDelete={() => setSelectedStaff(prev => prev.filter(id => id !== staffId))}
-                    />
-                  );
-                })}
-              </Box>
-            </Box>
-          )}
+          <Grid container spacing={2} sx={{ mt: 1 }}>
+            <Grid item xs={12} md={6}>
+              <TextField
+                fullWidth
+                label="Task Title"
+                value={newTask.title}
+                onChange={(e) => setNewTask({...newTask, title: e.target.value})}
+              />
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <FormControl fullWidth>
+                <InputLabel>Category</InputLabel>
+                <Select
+                  value={newTask.category}
+                  onChange={(e) => setNewTask({...newTask, category: e.target.value})}
+                >
+                  {taskCategories.map(cat => (
+                    <MenuItem key={cat.value} value={cat.value}>
+                      {cat.label}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Grid>
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
+                multiline
+                rows={3}
+                label="Description"
+                value={newTask.description}
+                onChange={(e) => setNewTask({...newTask, description: e.target.value})}
+              />
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <TextField
+                fullWidth
+                type="datetime-local"
+                label="Start Time"
+                value={newTask.startTime}
+                onChange={(e) => setNewTask({...newTask, startTime: e.target.value})}
+                InputLabelProps={{ shrink: true }}
+              />
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <TextField
+                fullWidth
+                type="datetime-local"
+                label="End Time"
+                value={newTask.endTime}
+                onChange={(e) => setNewTask({...newTask, endTime: e.target.value})}
+                InputLabelProps={{ shrink: true }}
+              />
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <TextField
+                fullWidth
+                type="number"
+                label="Required Staff"
+                value={newTask.requiredStaff}
+                onChange={(e) => setNewTask({...newTask, requiredStaff: parseInt(e.target.value)})}
+                inputProps={{ min: 1, max: 10 }}
+              />
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <FormControl fullWidth>
+                <InputLabel>Priority</InputLabel>
+                <Select
+                  value={newTask.priority}
+                  onChange={(e) => setNewTask({...newTask, priority: e.target.value})}
+                >
+                  {priorities.map(priority => (
+                    <MenuItem key={priority.value} value={priority.value}>
+                      <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                        <Box
+                          sx={{
+                            width: 12,
+                            height: 12,
+                            borderRadius: '50%',
+                            backgroundColor: priority.color,
+                            mr: 1
+                          }}
+                        />
+                        {priority.label}
+                      </Box>
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Grid>
+          </Grid>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setAssignOpen(false)}>Cancel</Button>
-          <Button onClick={handleStaffAssignment} variant="contained">
-            Assign Staff ({selectedStaff.length})
+          <Button onClick={() => setOpenDialog(false)}>Cancel</Button>
+          <Button 
+            onClick={handleCreateTask} 
+            variant="contained"
+            disabled={!newTask.title || !newTask.startTime || !newTask.endTime}
+          >
+            Create Task
           </Button>
         </DialogActions>
       </Dialog>
     </Box>
   );
 };
-
-export default Scheduling;

@@ -54,9 +54,11 @@ if (process.env.NODE_ENV === 'production') {
 
 // Import utilities
 const { initializeReminderSchedule } = require('./utils/mentorshipReminders');
+const { initializeSchedulingReminders } = require('./utils/schedulingReminders');
 
-// Initialize reminder scheduler
+// Initialize reminder schedulers
 initializeReminderSchedule();
+initializeSchedulingReminders();
 
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`YCA CRM Server running on port ${PORT}`);
