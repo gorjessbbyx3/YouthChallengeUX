@@ -1,217 +1,310 @@
 
--- YCA CRM Supabase Database Schema
+-- YCA CRM Database Schema for Supabase
+
+-- Enable UUID extension
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
+-- Cadets table
+CREATE TABLE IF NOT EXISTS cadets (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    first_name VARCHAR(100) NOT NULL,
+    last_name VARCHAR(100) NOT NULL,
+    date_of_birth DATE,
+    phone VARCHAR(20),
+    email VARCHAR(255),
+    address TEXT,
+    emergency_contact_name VARCHAR(255),
+    emergency_contact_phone VARCHAR(20),
+    platoon VARCHAR(50),
+    rank VARCHAR(50),
+    status VARCHAR(20) DEFAULT 'active',
+    enrollment_date DATE DEFAULT CURRENT_DATE,
+    graduation_date DATE,
+    notes TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
 
 -- Staff table
 CREATE TABLE IF NOT EXISTS staff (
-    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     first_name VARCHAR(100) NOT NULL,
     last_name VARCHAR(100) NOT NULL,
     email VARCHAR(255) UNIQUE NOT NULL,
     phone VARCHAR(20),
-    role VARCHAR(50) NOT NULL CHECK (role IN ('admin', 'instructor', 'counselor', 'staff', 'medical')),
+    role VARCHAR(100),
     department VARCHAR(100),
     hire_date DATE,
     is_active BOOLEAN DEFAULT true,
+    certifications TEXT[],
     availability JSONB,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- Cadets table
-CREATE TABLE IF NOT EXISTS cadets (
-    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    first_name VARCHAR(100) NOT NULL,
-    last_name VARCHAR(100) NOT NULL,
-    date_of_birth DATE,
-    email VARCHAR(255),
-    phone VARCHAR(20),
-    address TEXT,
-    emergency_contact_name VARCHAR(200),
-    emergency_contact_phone VARCHAR(20),
-    admission_date DATE,
-    graduation_date DATE,
-    status VARCHAR(50) DEFAULT 'active' CHECK (status IN ('active', 'graduated', 'withdrawn', 'suspended')),
-    platoon VARCHAR(50),
-    company VARCHAR(50),
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
-
--- Document folders table
-CREATE TABLE IF NOT EXISTS document_folders (
-    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    name VARCHAR(255) NOT NULL,
+-- Staff schedules table
+CREATE TABLE IF NOT EXISTS staff_schedules (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    staff_id UUID REFERENCES staff(id) ON DELETE CASCADE,
+    task_name VARCHAR(255) NOT NULL,
     description TEXT,
-    parent_id UUID REFERENCES document_folders(id),
-    created_by UUID REFERENCES staff(id),
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
-
--- Documents table
-CREATE TABLE IF NOT EXISTS documents (
-    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    name VARCHAR(255) NOT NULL,
-    type VARCHAR(100) NOT NULL,
-    file_path TEXT NOT NULL,
-    file_name VARCHAR(255) NOT NULL,
-    original_name VARCHAR(255) NOT NULL,
-    file_size BIGINT,
-    mime_type VARCHAR(100),
-    cadet_id UUID REFERENCES cadets(id),
-    folder_id UUID REFERENCES document_folders(id),
-    access_level VARCHAR(50) NOT NULL DEFAULT 'staff_only' 
-        CHECK (access_level IN ('public', 'staff_only', 'admin_only', 'medical_staff', 'cadet_family')),
-    retention_period INTEGER NOT NULL DEFAULT 2555, -- days
-    retention_expiry TIMESTAMP WITH TIME ZONE,
-    compliance_required BOOLEAN DEFAULT false,
-    uploaded_by UUID REFERENCES staff(id),
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
-
--- Document activity log table
-CREATE TABLE IF NOT EXISTS document_activity (
-    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    document_id UUID REFERENCES documents(id) ON DELETE CASCADE,
-    action VARCHAR(50) NOT NULL CHECK (action IN ('upload', 'download', 'view', 'edit', 'delete', 'share')),
-    user_id UUID REFERENCES staff(id),
-    ip_address INET,
-    user_agent TEXT,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
-
--- Document archive table
-CREATE TABLE IF NOT EXISTS document_archive (
-    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    original_document_id UUID NOT NULL,
-    name VARCHAR(255) NOT NULL,
-    type VARCHAR(100) NOT NULL,
-    file_path TEXT,
-    cadet_id UUID,
-    access_level VARCHAR(50),
-    retention_period INTEGER,
-    compliance_required BOOLEAN,
-    uploaded_by UUID,
-    original_created_at TIMESTAMP WITH TIME ZONE,
-    archived_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    archived_by UUID REFERENCES staff(id),
-    archive_reason TEXT
-);
-
--- Scheduling tables
-CREATE TABLE IF NOT EXISTS schedule_tasks (
-    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    title VARCHAR(255) NOT NULL,
-    description TEXT,
-    start_time TIMESTAMP WITH TIME ZONE NOT NULL,
-    end_time TIMESTAMP WITH TIME ZONE NOT NULL,
+    date DATE NOT NULL,
+    start_time TIME NOT NULL,
+    end_time TIME NOT NULL,
     location VARCHAR(255),
     required_staff INTEGER DEFAULT 1,
-    task_type VARCHAR(100) NOT NULL,
-    priority VARCHAR(20) DEFAULT 'medium' CHECK (priority IN ('low', 'medium', 'high', 'urgent')),
-    status VARCHAR(50) DEFAULT 'scheduled' CHECK (status IN ('scheduled', 'in_progress', 'completed', 'cancelled')),
-    created_by UUID REFERENCES staff(id),
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
-
-CREATE TABLE IF NOT EXISTS schedule_assignments (
-    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    task_id UUID REFERENCES schedule_tasks(id) ON DELETE CASCADE,
-    staff_id UUID REFERENCES staff(id) ON DELETE CASCADE,
-    role VARCHAR(100),
-    assigned_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    assigned_by UUID REFERENCES staff(id),
-    UNIQUE(task_id, staff_id)
-);
-
--- Communications table
-CREATE TABLE IF NOT EXISTS communications (
-    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    type VARCHAR(50) NOT NULL CHECK (type IN ('email', 'sms', 'phone', 'letter', 'meeting')),
-    subject VARCHAR(500),
-    message TEXT NOT NULL,
-    cadet_id UUID REFERENCES cadets(id),
-    staff_id UUID REFERENCES staff(id),
-    recipient_type VARCHAR(50) NOT NULL CHECK (recipient_type IN ('parent', 'guardian', 'emergency_contact', 'cadet')),
-    recipient_name VARCHAR(200),
-    recipient_contact VARCHAR(255),
-    status VARCHAR(50) DEFAULT 'draft' CHECK (status IN ('draft', 'sent', 'delivered', 'failed')),
-    sent_at TIMESTAMP WITH TIME ZONE,
-    delivery_confirmation BOOLEAN DEFAULT false,
-    priority VARCHAR(20) DEFAULT 'normal' CHECK (priority IN ('low', 'normal', 'high', 'urgent')),
-    created_by UUID REFERENCES staff(id),
+    assigned_staff UUID[],
+    status VARCHAR(20) DEFAULT 'scheduled',
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
 -- Behavioral tracking table
 CREATE TABLE IF NOT EXISTS behavioral_tracking (
-    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    cadet_id UUID REFERENCES cadets(id) NOT NULL,
-    date DATE NOT NULL,
-    behavior_type VARCHAR(100) NOT NULL,
-    severity INTEGER CHECK (severity >= 1 AND severity <= 10),
-    description TEXT,
-    context TEXT,
-    location VARCHAR(255),
-    staff_witness UUID REFERENCES staff(id),
-    intervention_taken TEXT,
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    cadet_id UUID REFERENCES cadets(id) ON DELETE CASCADE,
+    incident_date DATE NOT NULL,
+    incident_type VARCHAR(100) NOT NULL,
+    severity VARCHAR(20) NOT NULL,
+    description TEXT NOT NULL,
+    action_taken TEXT,
+    staff_involved VARCHAR(255),
     follow_up_required BOOLEAN DEFAULT false,
-    follow_up_date DATE,
-    parent_notified BOOLEAN DEFAULT false,
-    incident_number VARCHAR(50) UNIQUE,
-    created_by UUID REFERENCES staff(id),
+    resolution_status VARCHAR(50) DEFAULT 'open',
+    created_by VARCHAR(255),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
 -- Academic tracking table
 CREATE TABLE IF NOT EXISTS academic_tracking (
-    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    cadet_id UUID REFERENCES cadets(id) NOT NULL,
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    cadet_id UUID REFERENCES cadets(id) ON DELETE CASCADE,
     subject VARCHAR(100) NOT NULL,
-    assignment_name VARCHAR(255),
-    assignment_type VARCHAR(100),
-    date_assigned DATE,
-    date_due DATE,
-    date_submitted DATE,
-    grade DECIMAL(5,2),
-    max_points DECIMAL(5,2),
-    percentage DECIMAL(5,2),
-    letter_grade VARCHAR(5),
-    instructor_id UUID REFERENCES staff(id),
+    assessment_type VARCHAR(100) NOT NULL,
+    grade NUMERIC(5,2),
+    assessment_date DATE NOT NULL,
+    instructor VARCHAR(255),
+    notes TEXT,
+    improvement_needed BOOLEAN DEFAULT false,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Communications table
+CREATE TABLE IF NOT EXISTS communications (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    sender_id UUID REFERENCES staff(id),
+    recipient_type VARCHAR(20) NOT NULL, -- 'cadet', 'staff', 'family', 'all'
+    recipient_ids UUID[],
+    subject VARCHAR(255) NOT NULL,
+    message TEXT NOT NULL,
+    communication_type VARCHAR(50) NOT NULL, -- 'email', 'sms', 'announcement'
+    priority VARCHAR(20) DEFAULT 'normal',
+    status VARCHAR(20) DEFAULT 'draft',
+    sent_at TIMESTAMP WITH TIME ZONE,
+    read_by JSONB DEFAULT '{}',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Document management table
+CREATE TABLE IF NOT EXISTS documents (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    name VARCHAR(255) NOT NULL,
+    description TEXT,
+    file_path VARCHAR(500) NOT NULL,
+    file_size INTEGER,
+    mime_type VARCHAR(100),
+    category VARCHAR(100) NOT NULL,
+    uploaded_by UUID REFERENCES staff(id),
+    associated_cadet_id UUID REFERENCES cadets(id),
+    tags TEXT[],
+    is_confidential BOOLEAN DEFAULT false,
+    access_level VARCHAR(50) DEFAULT 'staff_only',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Mentorship relationships table
+CREATE TABLE IF NOT EXISTS mentorship_relationships (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    cadet_id UUID REFERENCES cadets(id) ON DELETE CASCADE,
+    mentor_id UUID REFERENCES staff(id) ON DELETE CASCADE,
+    program_type VARCHAR(100) NOT NULL,
+    start_date DATE NOT NULL,
+    end_date DATE,
+    status VARCHAR(20) DEFAULT 'active', -- 'active', 'completed', 'paused', 'terminated'
+    goals JSONB DEFAULT '[]',
+    notes TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Mentorship logs table
+CREATE TABLE IF NOT EXISTS mentorship_logs (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    cadet_id UUID REFERENCES cadets(id) ON DELETE CASCADE,
+    mentor_id UUID REFERENCES staff(id) ON DELETE CASCADE,
+    session_date DATE NOT NULL,
+    session_type VARCHAR(100) NOT NULL, -- 'one-on-one', 'group', 'activity', 'check-in'
+    notes TEXT,
+    goals_set JSONB DEFAULT '[]',
+    progress_rating INTEGER CHECK (progress_rating >= 1 AND progress_rating <= 10),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Events table
+CREATE TABLE IF NOT EXISTS events (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    title VARCHAR(255) NOT NULL,
+    description TEXT,
+    event_type VARCHAR(100) NOT NULL,
+    start_date TIMESTAMP WITH TIME ZONE NOT NULL,
+    end_date TIMESTAMP WITH TIME ZONE NOT NULL,
+    location VARCHAR(255),
+    max_participants INTEGER,
+    required_staff INTEGER DEFAULT 1,
+    assigned_staff UUID[],
+    participant_ids UUID[],
+    status VARCHAR(20) DEFAULT 'planned',
+    equipment_needed TEXT[],
+    budget DECIMAL(10,2),
+    created_by UUID REFERENCES staff(id),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Inventory table
+CREATE TABLE IF NOT EXISTS inventory (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    item_name VARCHAR(255) NOT NULL,
+    description TEXT,
+    category VARCHAR(100) NOT NULL,
+    quantity_available INTEGER NOT NULL DEFAULT 0,
+    quantity_reserved INTEGER DEFAULT 0,
+    location VARCHAR(255),
+    condition VARCHAR(50) DEFAULT 'good',
+    purchase_date DATE,
+    cost DECIMAL(10,2),
+    supplier VARCHAR(255),
+    maintenance_due DATE,
     notes TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
 -- Create indexes for better performance
-CREATE INDEX IF NOT EXISTS idx_documents_cadet_id ON documents(cadet_id);
-CREATE INDEX IF NOT EXISTS idx_documents_type ON documents(type);
-CREATE INDEX IF NOT EXISTS idx_documents_created_at ON documents(created_at);
-CREATE INDEX IF NOT EXISTS idx_document_activity_document_id ON document_activity(document_id);
-CREATE INDEX IF NOT EXISTS idx_schedule_tasks_start_time ON schedule_tasks(start_time);
-CREATE INDEX IF NOT EXISTS idx_communications_cadet_id ON communications(cadet_id);
-CREATE INDEX IF NOT EXISTS idx_behavioral_tracking_cadet_id ON behavioral_tracking(cadet_id);
-CREATE INDEX IF NOT EXISTS idx_academic_tracking_cadet_id ON academic_tracking(cadet_id);
+CREATE INDEX IF NOT EXISTS idx_cadets_status ON cadets(status);
+CREATE INDEX IF NOT EXISTS idx_cadets_platoon ON cadets(platoon);
+CREATE INDEX IF NOT EXISTS idx_staff_active ON staff(is_active);
+CREATE INDEX IF NOT EXISTS idx_behavioral_cadet_date ON behavioral_tracking(cadet_id, incident_date);
+CREATE INDEX IF NOT EXISTS idx_academic_cadet_date ON academic_tracking(cadet_id, assessment_date);
+CREATE INDEX IF NOT EXISTS idx_mentorship_cadet ON mentorship_relationships(cadet_id);
+CREATE INDEX IF NOT EXISTS idx_mentorship_mentor ON mentorship_relationships(mentor_id);
+CREATE INDEX IF NOT EXISTS idx_mentorship_status ON mentorship_relationships(status);
+CREATE INDEX IF NOT EXISTS idx_events_date ON events(start_date);
+CREATE INDEX IF NOT EXISTS idx_documents_category ON documents(category);
 
--- Insert default document folders
-INSERT INTO document_folders (name, description) VALUES
-    ('Cadet Records', 'Primary cadet documentation and records'),
-    ('Medical Records', 'Health and medical documentation'),
-    ('Academic Records', 'Educational transcripts and assessments'),
-    ('Behavioral Reports', 'Incident reports and behavioral documentation'),
-    ('Legal Documents', 'Legal papers and court-ordered documentation'),
-    ('Family Communications', 'Letters and communications with families'),
-    ('Staff Documents', 'Internal staff memos and training materials'),
-    ('Policies & Procedures', 'Official program policies and procedures')
-ON CONFLICT DO NOTHING;
+-- Enable Row Level Security (RLS) for all tables
+ALTER TABLE cadets ENABLE ROW LEVEL SECURITY;
+ALTER TABLE staff ENABLE ROW LEVEL SECURITY;
+ALTER TABLE staff_schedules ENABLE ROW LEVEL SECURITY;
+ALTER TABLE behavioral_tracking ENABLE ROW LEVEL SECURITY;
+ALTER TABLE academic_tracking ENABLE ROW LEVEL SECURITY;
+ALTER TABLE communications ENABLE ROW LEVEL SECURITY;
+ALTER TABLE documents ENABLE ROW LEVEL SECURITY;
+ALTER TABLE mentorship_relationships ENABLE ROW LEVEL SECURITY;
+ALTER TABLE mentorship_logs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE events ENABLE ROW LEVEL SECURITY;
+ALTER TABLE inventory ENABLE ROW LEVEL SECURITY;
 
--- Insert sample staff (optional - for testing)
-INSERT INTO staff (first_name, last_name, email, role, department) VALUES
-    ('Admin', 'User', 'admin@yca.hawaii.gov', 'admin', 'Administration'),
-    ('Sarah', 'Johnson', 'sarah.johnson@yca.hawaii.gov', 'instructor', 'Academic'),
-    ('Mike', 'Chen', 'mike.chen@yca.hawaii.gov', 'counselor', 'Behavioral Health'),
-    ('Lisa', 'Rodriguez', 'lisa.rodriguez@yca.hawaii.gov', 'medical', 'Medical')
-ON CONFLICT (email) DO NOTHING;
+-- Create basic RLS policies (adjust based on your authentication needs)
+-- For demonstration, allowing all authenticated users to access data
+-- In production, implement more restrictive policies based on roles
+
+-- Policies for cadets table
+CREATE POLICY "Allow authenticated users to view cadets" ON cadets
+    FOR SELECT USING (auth.role() = 'authenticated');
+
+CREATE POLICY "Allow authenticated users to manage cadets" ON cadets
+    FOR ALL USING (auth.role() = 'authenticated');
+
+-- Policies for staff table
+CREATE POLICY "Allow authenticated users to view staff" ON staff
+    FOR SELECT USING (auth.role() = 'authenticated');
+
+CREATE POLICY "Allow authenticated users to manage staff" ON staff
+    FOR ALL USING (auth.role() = 'authenticated');
+
+-- Similar policies for other tables
+CREATE POLICY "Allow authenticated access to staff_schedules" ON staff_schedules
+    FOR ALL USING (auth.role() = 'authenticated');
+
+CREATE POLICY "Allow authenticated access to behavioral_tracking" ON behavioral_tracking
+    FOR ALL USING (auth.role() = 'authenticated');
+
+CREATE POLICY "Allow authenticated access to academic_tracking" ON academic_tracking
+    FOR ALL USING (auth.role() = 'authenticated');
+
+CREATE POLICY "Allow authenticated access to communications" ON communications
+    FOR ALL USING (auth.role() = 'authenticated');
+
+CREATE POLICY "Allow authenticated access to documents" ON documents
+    FOR ALL USING (auth.role() = 'authenticated');
+
+CREATE POLICY "Allow authenticated access to mentorship_relationships" ON mentorship_relationships
+    FOR ALL USING (auth.role() = 'authenticated');
+
+CREATE POLICY "Allow authenticated access to mentorship_logs" ON mentorship_logs
+    FOR ALL USING (auth.role() = 'authenticated');
+
+CREATE POLICY "Allow authenticated access to events" ON events
+    FOR ALL USING (auth.role() = 'authenticated');
+
+CREATE POLICY "Allow authenticated access to inventory" ON inventory
+    FOR ALL USING (auth.role() = 'authenticated');
+
+-- Update triggers for updated_at columns
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = NOW();
+    RETURN NEW;
+END;
+$$ language 'plpgsql';
+
+-- Apply update triggers to all tables
+CREATE TRIGGER update_cadets_updated_at BEFORE UPDATE ON cadets 
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_staff_updated_at BEFORE UPDATE ON staff 
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_staff_schedules_updated_at BEFORE UPDATE ON staff_schedules 
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_behavioral_tracking_updated_at BEFORE UPDATE ON behavioral_tracking 
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_academic_tracking_updated_at BEFORE UPDATE ON academic_tracking 
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_communications_updated_at BEFORE UPDATE ON communications 
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_documents_updated_at BEFORE UPDATE ON documents 
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_mentorship_relationships_updated_at BEFORE UPDATE ON mentorship_relationships 
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_mentorship_logs_updated_at BEFORE UPDATE ON mentorship_logs 
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_events_updated_at BEFORE UPDATE ON events 
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_inventory_updated_at BEFORE UPDATE ON inventory 
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
