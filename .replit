@@ -1,9 +1,9 @@
 entrypoint = "index.js"
-modules = ["nodejs-20:v8-20230920-bd784b9"]
+modules = ["nodejs-20", "nix"]
 hidden = [".config", "package-lock.json"]
 
 [nix]
-channel = "stable-23_05"
+channel = "stable-25_05"
 
 [unitTest]
 language = "nodejs"
@@ -71,3 +71,6 @@ args = "cd .."
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "NODE_ENV=production node server/index.js"
+
+[agent]
+expertMode = true
