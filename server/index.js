@@ -6,6 +6,28 @@ require('dotenv').config();
 // Import utilities
 const { scheduleEventReminders } = require('./utils/eventReminders');
 
+// Import routes
+const authRoutes = require('./routes/auth');
+const cadetRoutes = require('./routes/cadets');
+const staffRoutes = require('./routes/staff');
+const inventoryRoutes = require('./routes/inventory');
+const mentorshipRoutes = require('./routes/mentorship');
+const schedulingRoutes = require('./routes/scheduling');
+const assignmentRoutes = require('./routes/assignments');
+const aiRoutes = require('./routes/ai');
+const reportsRoutes = require('./routes/reports');
+const communicationsRoutes = require('./routes/communications');
+const documentsRoutes = require('./routes/documents');
+const eventsRoutes = require('./routes/events');
+const behavioralRoutes = require('./routes/behavioral-tracking');
+const academicRoutes = require('./routes/academic-tracking');
+const roomAssignmentsRoutes = require('./routes/room-assignments');
+const supervisorAssignmentsRoutes = require('./routes/supervisor-assignments');
+const parentsRoutes = require('./routes/parents');
+const milestonesRoutes = require('./routes/milestones');
+const complianceRoutes = require('./routes/compliance');
+const analyticsRoutes = require('./routes/analytics');
+
 const app = express();
 const PORT = process.env.PORT || 5000;
 
@@ -14,21 +36,28 @@ app.use(cors());
 app.use(express.json());
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-// Routes
-app.use('/api/auth', require('./routes/auth'));
-app.use('/api/cadets', require('./routes/cadets'));
-app.use('/api/staff', require('./routes/staff'));
-app.use('/api/behavioral-tracking', require('./routes/behavioral-tracking'));
-app.use('/api/academic-tracking', require('./routes/academic-tracking'));
-app.use('/api/mentorship', require('./routes/mentorship'));
-app.use('/api/assignments', require('./routes/assignments'));
-app.use('/api/communications', require('./routes/communications'));
-app.use('/api/documents', require('./routes/documents'));
-app.use('/api/inventory', require('./routes/inventory'));
-app.use('/api/events', require('./routes/events'));
-app.use('/api/scheduling', require('./routes/scheduling'));
-app.use('/api/reports', require('./routes/reports'));
-app.use('/api/ai', require('./routes/ai'));
+// Use routes
+app.use('/api/auth', authRoutes);
+app.use('/api/cadets', cadetRoutes);
+app.use('/api/staff', staffRoutes);
+app.use('/api/inventory', inventoryRoutes);
+app.use('/api/mentorship', mentorshipRoutes);
+app.use('/api/scheduling', schedulingRoutes);
+app.use('/api/assignments', assignmentRoutes);
+app.use('/api/ai', aiRoutes);
+app.use('/api/reports', reportsRoutes);
+app.use('/api/communications', communicationsRoutes);
+app.use('/api/documents', documentsRoutes);
+app.use('/api/events', eventsRoutes);
+app.use('/api/behavioral-tracking', behavioralRoutes);
+app.use('/api/academic-tracking', academicRoutes);
+app.use('/api/room-assignments', roomAssignmentsRoutes);
+app.use('/api/supervisor-assignments', supervisorAssignmentsRoutes);
+app.use('/api/parents', parentsRoutes);
+app.use('/api/milestones', milestonesRoutes);
+app.use('/api/compliance', complianceRoutes);
+app.use('/api/analytics', analyticsRoutes);
+
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
@@ -54,7 +83,11 @@ app.get('/', (req, res) => {
       '/api/events',
       '/api/scheduling',
       '/api/reports',
-      '/api/ai'
+      '/api/ai',
+      '/api/parents',
+      '/api/milestones',
+      '/api/compliance',
+      '/api/analytics'
     ]
   });
 });

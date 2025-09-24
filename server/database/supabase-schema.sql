@@ -295,6 +295,102 @@ CREATE INDEX IF NOT EXISTS idx_mentorship_mentor ON mentorship_relationships(men
 CREATE INDEX IF NOT EXISTS idx_mentorship_status ON mentorship_relationships(status);
 CREATE INDEX IF NOT EXISTS idx_documents_category ON documents(category);
 
+-- Parents table
+CREATE TABLE IF NOT EXISTS parents (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    cadet_id UUID REFERENCES cadets(id) ON DELETE CASCADE,
+    first_name VARCHAR(100) NOT NULL,
+    last_name VARCHAR(100) NOT NULL,
+    email VARCHAR(255) UNIQUE NOT NULL,
+    phone VARCHAR(20),
+    relationship VARCHAR(50) NOT NULL,
+    access_granted BOOLEAN DEFAULT true,
+    last_login TIMESTAMP WITH TIME ZONE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Cadet milestones table
+CREATE TABLE IF NOT EXISTS cadet_milestones (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    cadet_id UUID REFERENCES cadets(id) ON DELETE CASCADE,
+    milestone_type VARCHAR(100) NOT NULL,
+    points INTEGER DEFAULT 0,
+    notes TEXT,
+    awarded_by UUID REFERENCES staff(id),
+    earned_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Compliance logs table
+CREATE TABLE IF NOT EXISTS compliance_logs (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    regulation VARCHAR(255) NOT NULL,
+    status VARCHAR(50) NOT NULL CHECK (status IN ('compliant', 'non_compliant', 'pending')),
+    description TEXT,
+    cadet_id UUID REFERENCES cadets(id),
+    staff_id UUID REFERENCES staff(id),
+    follow_up_required BOOLEAN DEFAULT false,
+    follow_up_date DATE,
+    resolved_at TIMESTAMP WITH TIME ZONE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- External integrations table
+CREATE TABLE IF NOT EXISTS external_integrations (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    service_name VARCHAR(100) NOT NULL,
+    api_key_encrypted TEXT,
+    settings JSONB DEFAULT '{}',
+    enabled BOOLEAN DEFAULT false,
+    last_sync TIMESTAMP WITH TIME ZONE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Activities log table
+CREATE TABLE IF NOT EXISTS activities (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    cadet_id UUID REFERENCES cadets(id) ON DELETE CASCADE,
+    activity_type VARCHAR(100) NOT NULL,
+    title VARCHAR(255) NOT NULL,
+    description TEXT,
+    points_earned INTEGER DEFAULT 0,
+    completed_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Document folders table
+CREATE TABLE IF NOT EXISTS document_folders (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    name VARCHAR(255) NOT NULL,
+    description TEXT,
+    parent_id UUID REFERENCES document_folders(id),
+    created_by UUID REFERENCES staff(id),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Document activity table
+CREATE TABLE IF NOT EXISTS document_activity (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    document_id UUID REFERENCES documents(id) ON DELETE CASCADE,
+    action VARCHAR(50) NOT NULL,
+    user_id UUID REFERENCES staff(id),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Document archive table
+CREATE TABLE IF NOT EXISTS document_archive (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    original_document_id UUID,
+    name VARCHAR(255) NOT NULL,
+    file_path VARCHAR(500),
+    archived_reason TEXT,
+    archived_by UUID REFERENCES staff(id),
+    archived_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
 -- Enable Row Level Security (RLS) for all tables
 ALTER TABLE cadets ENABLE ROW LEVEL SECURITY;
 ALTER TABLE staff ENABLE ROW LEVEL SECURITY;
@@ -364,6 +460,31 @@ CREATE POLICY "Allow authenticated access to event_cadet_assignments" ON event_c
     FOR ALL USING (auth.role() = 'authenticated');
 
 CREATE POLICY "Allow authenticated access to event_reminders" ON event_reminders
+    FOR ALL USING (auth.role() = 'authenticated');
+
+-- Policies for new tables
+CREATE POLICY "Allow authenticated access to parents" ON parents
+    FOR ALL USING (auth.role() = 'authenticated');
+
+CREATE POLICY "Allow authenticated access to cadet_milestones" ON cadet_milestones
+    FOR ALL USING (auth.role() = 'authenticated');
+
+CREATE POLICY "Allow authenticated access to compliance_logs" ON compliance_logs
+    FOR ALL USING (auth.role() = 'authenticated');
+
+CREATE POLICY "Allow authenticated access to external_integrations" ON external_integrations
+    FOR ALL USING (auth.role() = 'authenticated');
+
+CREATE POLICY "Allow authenticated access to activities" ON activities
+    FOR ALL USING (auth.role() = 'authenticated');
+
+CREATE POLICY "Allow authenticated access to document_folders" ON document_folders
+    FOR ALL USING (auth.role() = 'authenticated');
+
+CREATE POLICY "Allow authenticated access to document_activity" ON document_activity
+    FOR ALL USING (auth.role() = 'authenticated');
+
+CREATE POLICY "Allow authenticated access to document_archive" ON document_archive
     FOR ALL USING (auth.role() = 'authenticated');
 
 -- Update triggers for updated_at columns

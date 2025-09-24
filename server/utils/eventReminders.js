@@ -1,18 +1,6 @@
-
 const cron = require('node-cron');
 const { supabase } = require('../database/supabase');
-const nodemailer = require('nodemailer');
-
-// Email transporter configuration
-const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST || 'smtp.gmail.com',
-  port: process.env.SMTP_PORT || 587,
-  secure: false,
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS
-  }
-});
+const emailService = require('./emailService');
 
 // Schedule daily reminder checks at 8 AM
 const scheduleEventReminders = () => {
@@ -37,7 +25,7 @@ const sendDailyEventReminders = async () => {
     const today = new Date();
     const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
-    
+
     const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
     const tomorrowEnd = new Date(tomorrow.getFullYear(), tomorrow.getMonth(), tomorrow.getDate(), 23, 59, 59);
 
@@ -173,7 +161,7 @@ const sendEventReminder = async (event, timeframe) => {
     });
 
     const subject = `Event Reminder: ${event.title} ${timeframe}`;
-    
+
     const message = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
         <h2 style="color: #2c3e50;">Event Reminder: ${event.title}</h2>
@@ -202,8 +190,7 @@ const sendEventReminder = async (event, timeframe) => {
     const allEmails = [...staffEmails, ...cadetEmails];
 
     if (allEmails.length > 0) {
-      await transporter.sendMail({
-        from: process.env.EMAIL_FROM || 'noreply@ycacrm.com',
+      await emailService.sendEmail({
         to: allEmails.join(','),
         subject,
         html: message
@@ -221,7 +208,7 @@ const sendEventReminder = async (event, timeframe) => {
     }
   } catch (error) {
     console.error('Error sending event reminder:', error);
-    
+
     // Log failed reminder
     await supabase
       .from('event_reminders')
@@ -238,7 +225,7 @@ const sendEventReminder = async (event, timeframe) => {
 const sendWeeklySummary = async (participant) => {
   try {
     const subject = `Weekly Event Schedule - ${participant.name}`;
-    
+
     const eventsList = participant.events.map(event => {
       const eventDate = new Date(event.start_date);
       const dayName = eventDate.toLocaleDateString('en-US', { weekday: 'long' });
@@ -267,23 +254,22 @@ const sendWeeklySummary = async (participant) => {
         <h2 style="color: #2c3e50;">Your Events This Week</h2>
         <p>Hi ${participant.name},</p>
         <p>Here are your scheduled events for the upcoming week:</p>
-        
+
         ${eventsList}
-        
+
         <div style="background-color: #e8f5e8; padding: 15px; border-radius: 8px; margin: 20px 0;">
           <p style="margin: 0;"><strong>📊 Week Summary:</strong></p>
           <p style="margin: 5px 0;">• Total Events: ${participant.events.length}</p>
           <p style="margin: 5px 0;">• Community Service Hours: ${participant.events.reduce((sum, e) => sum + (e.community_service_hours || 0), 0)}</p>
         </div>
-        
+
         <p style="color: #7f8c8d;">Stay engaged and make a difference in your community!</p>
         <hr style="border: none; border-top: 1px solid #ecf0f1; margin: 20px 0;">
         <p style="font-size: 12px; color: #95a5a6;">This is an automated weekly summary from the YCA CRM system.</p>
       </div>
     `;
 
-    await transporter.sendMail({
-      from: process.env.EMAIL_FROM || 'noreply@ycacrm.com',
+    await emailService.sendEmail({
       to: participant.email,
       subject,
       html: message

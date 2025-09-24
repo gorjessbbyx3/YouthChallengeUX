@@ -23,6 +23,9 @@ import { InventoryList, InventoryEdit, InventoryCreate, InventoryKanban } from '
 import { CadetList, CadetEdit, CadetCreate, CadetShow, CadetDashboard } from './components/CadetsManagement';
 import { InventoryForecasting } from './components/InventoryForecasting';
 import { BehaviorPrediction } from './components/BehaviorPrediction';
+import ParentPortal from './components/ParentPortal';
+import BadgeSystem from './components/BadgeSystem';
+import ComplianceDashboard from './components/ComplianceDashboard';
 
 // Icons
 import {
@@ -115,6 +118,24 @@ const App = () => (
           list={DocumentManagement} 
           icon={FolderIcon}
           options={{ label: 'Document Management' }} 
+        />
+        <Resource 
+          name="parent-portal" 
+          list={ParentPortal} 
+          icon={GroupIcon}
+          options={{ label: 'Parent Portal' }} 
+        />
+        <Resource 
+          name="badges" 
+          list={BadgeSystem} 
+          icon={AssignmentIcon}
+          options={{ label: 'Badges & Milestones' }} 
+        />
+        <Resource 
+          name="compliance" 
+          list={ComplianceDashboard} 
+          icon={AnalyticsIcon}
+          options={{ label: 'DoD Compliance' }} 
         />
       </Admin>
 );
