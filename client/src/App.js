@@ -26,6 +26,8 @@ import { BehaviorPrediction } from './components/BehaviorPrediction';
 import ParentPortal from './components/ParentPortal';
 import BadgeSystem from './components/BadgeSystem';
 import ComplianceDashboard from './components/ComplianceDashboard';
+import AnalyticsDashboard from './components/AnalyticsDashboard';
+import OfflineSync from './components/OfflineSync';
 
 // Icons
 import {
@@ -136,6 +138,18 @@ const App = () => (
           list={ComplianceDashboard} 
           icon={AnalyticsIcon}
           options={{ label: 'DoD Compliance' }} 
+        />
+        <Resource 
+          name="analytics-dashboard" 
+          list={AnalyticsDashboard} 
+          icon={AnalyticsIcon}
+          options={{ label: 'Analytics Dashboard' }} 
+        />
+        <Resource 
+          name="offline-sync" 
+          list={OfflineSync} 
+          icon={ChatIcon}
+          options={{ label: 'Offline Sync' }} 
         />
       </Admin>
 );

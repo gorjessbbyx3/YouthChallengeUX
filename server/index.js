@@ -27,6 +27,7 @@ const parentsRoutes = require('./routes/parents');
 const milestonesRoutes = require('./routes/milestones');
 const complianceRoutes = require('./routes/compliance');
 const analyticsRoutes = require('./routes/analytics');
+const integrationsRoutes = require('./routes/integrations');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -57,6 +58,7 @@ app.use('/api/parents', parentsRoutes);
 app.use('/api/milestones', milestonesRoutes);
 app.use('/api/compliance', complianceRoutes);
 app.use('/api/analytics', analyticsRoutes);
+app.use('/api/integrations', integrationsRoutes);
 
 
 // Health check endpoint
@@ -87,7 +89,8 @@ app.get('/', (req, res) => {
       '/api/parents',
       '/api/milestones',
       '/api/compliance',
-      '/api/analytics'
+      '/api/analytics',
+      '/api/integrations'
     ]
   });
 });
