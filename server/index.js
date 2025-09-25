@@ -3,6 +3,9 @@ const cors = require('cors');
 const path = require('path');
 require('dotenv').config();
 
+// Import database connections
+const { testConnection, initializeTables } = require('./database/postgresql');
+
 // Import utilities
 const { scheduleEventReminders } = require('./utils/eventReminders');
 
@@ -95,12 +98,26 @@ app.get('/', (req, res) => {
   });
 });
 
-// Initialize schedulers and background tasks
-console.log('Initializing background services...');
-scheduleEventReminders();
-console.log('Event reminder scheduler initialized');
+// Initialize database and background tasks
+const initializeServer = async () => {
+  try {
+    console.log('Initializing database connection...');
+    await testConnection();
+    await initializeTables();
+    console.log('Database initialized successfully');
 
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`YCA CRM Server running on port ${PORT}`);
-  console.log('All background services are running');
-});
+    console.log('Initializing background services...');
+    scheduleEventReminders();
+    console.log('Event reminder scheduler initialized');
+
+    app.listen(PORT, '0.0.0.0', () => {
+      console.log(`YCA CRM Server running on port ${PORT}`);
+      console.log('All services are running');
+    });
+  } catch (error) {
+    console.error('Failed to initialize server:', error);
+    process.exit(1);
+  }
+};
+
+initializeServer();
